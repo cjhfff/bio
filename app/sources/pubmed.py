@@ -51,15 +51,16 @@ class PubMedSource(BaseSource):
         stat = {"total": 0, "excluded": 0, "date_filtered": 0, "duplicate": 0, "final": 0}
         
         try:
-            today = datetime.date.today().strftime("%Y/%m/%d")
-            start_date = (datetime.date.today() - datetime.timedelta(days=self.window_days)).strftime("%Y/%m/%d")
+            # 只检索前一天的论文（不包括今天）
+            yesterday = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y/%m/%d")
+            start_date = yesterday
             
             # 构建查询（优化：支持更灵活的匹配，如"GPCR-like"、"natural biological nitrogen fixation"）
             q_nitro = '("Nitrogen Fixation"[Mesh] OR "Nitrogenase"[Mesh] OR "biological nitrogen fixation" OR "natural biological nitrogen fixation" OR rhizobia OR "root nodule" OR symbiosis OR diazotroph OR "nif genes" OR "nitrogen fixing")'
             q_signal = '("Signal Transduction"[Mesh] OR "Receptors, Cell Surface"[Mesh] OR "extracellular signal perception" OR "signal perception" OR "receptor kinase" OR "GPCR" OR "GPCR-like" OR "G-protein coupled receptor" OR "ligand binding" OR "hormone perception" OR "hormone signaling" OR "two-component system")'
             q_enzyme = '("Enzymes/chemistry"[Mesh] OR "Catalytic Domain"[Mesh] OR "enzyme mechanism" OR "cryo-EM" OR "cryo-electron microscopy" OR "crystal structure" OR "active site" OR "catalytic mechanism" OR "enzyme structure" OR "enzyme structure determination")'
             
-            combined_query = f"({q_nitro} OR {q_signal} OR {q_enzyme}) AND (\"{start_date}\"[Date - Publication] : \"{today}\"[Date - Publication])"
+            combined_query = f"({q_nitro} OR {q_signal} OR {q_enzyme}) AND (\"{start_date}\"[Date - Publication] : \"{yesterday}\"[Date - Publication])"
             
             # 搜索
             handle = Entrez.esearch(db="pubmed", term=combined_query, retmax=100, retmode="xml")

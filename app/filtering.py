@@ -169,8 +169,9 @@ def is_recent_date(date_str: str, days: int = 7, is_top_tier: bool = False) -> b
         today = datetime.date.today()
         days_diff = (today - paper_date).days
         
-        # 增强时区容错：允许未来 1 天内的日期（处理时区差异）
-        return -1 <= days_diff <= days
+        # 只允许前一天的日期（days_diff == 1 表示昨天）
+        # 允许 0 <= days_diff <= 1 以处理时区差异，但主要目标是前一天
+        return days_diff == 1
     except Exception:
         # 异常情况，检查是否为顶刊
         if is_top_tier:

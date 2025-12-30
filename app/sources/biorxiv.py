@@ -88,8 +88,9 @@ class BioRxivSource(BaseSource):
         从 bioRxiv 获取论文（支持动态分页、诊断日志、豁免机制、重试机制）
         """
         try:
-            today = datetime.date.today().strftime("%Y-%m-%d")
-            start_date = (datetime.date.today() - datetime.timedelta(days=self.window_days)).strftime("%Y-%m-%d")
+            # 只检索前一天的论文（不包括今天）
+            yesterday = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+            start_date = yesterday
             start_date_obj = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
             
             papers = []
@@ -117,7 +118,7 @@ class BioRxivSource(BaseSource):
             # 动态分页抓取
             for page in range(self.max_pages):
                 cursor = page * PAGE_SIZE
-                url = f"https://api.biorxiv.org/details/biorxiv/{start_date}/{today}/{cursor}"
+                url = f"https://api.biorxiv.org/details/biorxiv/{start_date}/{yesterday}/{cursor}"
                 
                 try:
                     # 使用带重试机制的抓取

@@ -19,8 +19,9 @@ class EuropePMCSource(BaseSource):
     
     def fetch(self, sent_ids: Set[str], exclude_keywords: List[str]) -> SourceResult:
         try:
-            today = datetime.date.today().strftime("%Y-%m-%d")
-            start_date = (datetime.date.today() - datetime.timedelta(days=self.window_days)).strftime("%Y-%m-%d")
+            # 只检索前一天的论文（不包括今天）
+            yesterday = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+            start_date = yesterday
             
             # 优化查询：使用更灵活的关键词匹配（去掉部分引号，允许更宽松的匹配）
             # 固氮相关
@@ -31,7 +32,7 @@ class EuropePMCSource(BaseSource):
             q_enzyme = '(enzyme structure OR enzyme mechanism OR catalytic mechanism OR active site OR catalytic site OR allosteric regulation OR allosteric site OR enzyme kinetics OR cryo-EM OR cryo-electron microscopy OR crystal structure OR X-ray crystallography OR substrate specificity OR enzyme catalysis OR catalytic domain OR enzyme structure determination OR protein structure OR molecular structure OR structural biology)'
             
             # 构建查询（使用OR连接三个方向，更宽松）
-            query = f'FIRST_PDATE:[{start_date} TO {today}] AND ({q_nitro} OR {q_signal} OR {q_enzyme})'
+            query = f'FIRST_PDATE:[{start_date} TO {yesterday}] AND ({q_nitro} OR {q_signal} OR {q_enzyme})'
             url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={query}&format=json&pageSize=50"
             
             # 添加调试日志
