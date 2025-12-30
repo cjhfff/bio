@@ -92,7 +92,7 @@ class PubMedSource(BaseSource):
                     abstract = " ".join(abstract_parts)
                     
                     # 提取日期与 DOI
-                    final_date = self._extract_date(article, today)
+                    final_date = self._extract_date(article, yesterday)
                     doi = self._extract_doi(article)
                     
                     # 提取 PMID 并生成链接

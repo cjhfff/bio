@@ -161,7 +161,9 @@ class GitHubSource(BaseSource):
                 return dt.strftime('%Y-%m-%d')
             except:
                 pass
-        return datetime.date.today().strftime('%Y-%m-%d')
+        # 如果没有更新日期，使用前一天作为默认值（因为只检索前一天的论文）
+        yesterday = (datetime.date.today() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+        return yesterday
 
 
 

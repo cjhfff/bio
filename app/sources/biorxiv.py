@@ -181,7 +181,7 @@ class BioRxivSource(BaseSource):
                     stat["cat_or_kw"] += 1
                     
                     # 提取并验证日期
-                    paper_date_str = p.get('date', '') or datetime.date.today().strftime('%Y-%m-%d')
+                    paper_date_str = p.get('date', '') or yesterday
                     # 检查日期年份是否异常（如果年份是去年但当前是年初，可能是数据源问题）
                     if paper_date_str:
                         try:
