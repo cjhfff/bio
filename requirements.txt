@@ -1,0 +1,23 @@
+# 核心依赖
+requests>=2.31.0
+openai>=1.0.0
+
+# 可选依赖（数据源）
+feedparser>=6.0.10  # RSS支持
+biopython>=1.81  # PubMed支持
+
+# 配置管理
+python-dotenv>=1.0.0
+
+# API服务
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# 其他
+email-validator>=2.1.0
+
+# Token精确计算
+tiktoken>=0.5.0
+
+
+

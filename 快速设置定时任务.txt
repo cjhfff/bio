@@ -1,0 +1,48 @@
+========================================
+Windows 定时任务设置 - 每天早上 8:30
+========================================
+
+方法一：使用 PowerShell（需要管理员权限）
+----------------------------------------
+1. 右键点击 PowerShell
+2. 选择"以管理员身份运行"
+3. 执行以下命令：
+
+   cd C:\Users\d\Desktop\worksapce\bio
+   powershell -ExecutionPolicy Bypass -File setup_scheduled_task.ps1
+
+方法二：手动设置（推荐，无需管理员权限）
+----------------------------------------
+1. 按 Win + R，输入 taskschd.msc，按回车
+2. 点击右侧"创建基本任务"
+3. 名称：BioPaperPushDaily
+4. 描述：每天早上 8:30 自动运行生物化学论文推送任务
+5. 触发器：选择"每天"
+6. 开始时间：08:30:00
+7. 操作：选择"启动程序"
+8. 程序或脚本：C:\Users\d\Desktop\worksapce\bio\run_daily.bat
+9. 起始于：C:\Users\d\Desktop\worksapce\bio
+10. 完成设置
+
+验证任务
+----------------------------------------
+1. 在任务计划程序中找到 "BioPaperPushDaily"
+2. 右键点击 -> "运行" 可以立即测试
+3. 查看"历史记录"选项卡查看运行结果
+
+查看日志
+----------------------------------------
+任务运行的日志保存在：
+logs/paper_push_YYYY-MM-DD_HHMMSS_RUNID.log
+
+删除任务
+----------------------------------------
+在任务计划程序中找到任务，右键 -> 删除
+
+或使用 PowerShell：
+Unregister-ScheduledTask -TaskName "BioPaperPushDaily" -Confirm:$false
+
+
+
+
+
