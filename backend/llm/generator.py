@@ -6,8 +6,8 @@ import logging
 from typing import List, Tuple
 from openai import OpenAI
 from backend.models import ScoredPaper, SourceResult
-from backend.config import Config
-from backend.ranking import get_priority_level
+from backend.core.config import Config
+from backend.core.ranking import get_priority_level
 
 logger = logging.getLogger(__name__)
 

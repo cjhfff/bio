@@ -5,8 +5,8 @@ import logging
 from typing import Set, List
 from backend.models import Paper, SourceResult
 from backend.sources.base import BaseSource
-from backend.config import Config
-from backend.filtering import should_exclude_paper, is_recent_date
+from backend.core.config import Config
+from backend.core.filtering import should_exclude_paper, is_recent_date
 
 logger = logging.getLogger(__name__)
 

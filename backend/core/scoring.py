@@ -4,7 +4,7 @@
 import datetime
 from typing import List, Tuple
 from backend.models import Paper, ScoreReason, ScoredPaper
-from backend.config import Config
+from backend.core.config import Config
 
 
 def score_paper(paper: Paper) -> ScoredPaper:

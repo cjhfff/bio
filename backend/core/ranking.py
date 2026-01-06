@@ -3,16 +3,16 @@
 """
 from typing import List, Tuple, Set
 from backend.models import Paper, ScoredPaper, SourceResult
-from backend.scoring import score_paper
-from backend.config import Config
-from backend.deduplication import get_item_id
+from backend.core.scoring import score_paper
+from backend.core.config import Config
+from backend.core.deduplication import get_item_id
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-# 注意：get_item_id 已迁移到 app.deduplication 模块
-# 请直接从 app.deduplication 导入
+# 注意：get_item_id 已迁移到 backend.core.deduplication 模块
+# 请直接从 backend.core.deduplication 导入
 
 
 def deduplicate_papers(papers: List[Paper], sent_ids: Set[str]) -> Tuple[List[Paper], Set[str]]:

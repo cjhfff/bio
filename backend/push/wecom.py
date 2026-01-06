@@ -4,7 +4,7 @@
 import requests
 import json
 import logging
-from backend.config import Config
+from backend.core.config import Config
 
 logger = logging.getLogger(__name__)
 

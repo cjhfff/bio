@@ -5,7 +5,7 @@ import smtplib
 import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from backend.config import Config
+from backend.core.config import Config
 
 logger = logging.getLogger(__name__)
 

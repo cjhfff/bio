@@ -5,7 +5,7 @@ import logging
 import re
 from typing import List
 from backend.models import Paper
-from backend.config import Config
+from backend.core.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +123,7 @@ def is_recent_date(date_str: str, days: int = 7, is_top_tier: bool = False) -> b
     if not date_str or date_str == '' or date_str == '日期未知':
         # 对于顶刊，缺失日期也默认信任
         if is_top_tier:
-            from backend.config import Config
+            from backend.core.config import Config
             if Config.ENABLE_TOP_TIER_DATE_TOLERANCE:
                 import logging
                 logger = logging.getLogger(__name__)
@@ -158,7 +158,7 @@ def is_recent_date(date_str: str, days: int = 7, is_top_tier: bool = False) -> b
         # 如果解析失败，检查是否为顶刊并启用容错
         if paper_date is None:
             if is_top_tier:
-                from backend.config import Config
+                from backend.core.config import Config
                 if Config.ENABLE_TOP_TIER_DATE_TOLERANCE:
                     import logging
                     logger = logging.getLogger(__name__)
@@ -175,7 +175,7 @@ def is_recent_date(date_str: str, days: int = 7, is_top_tier: bool = False) -> b
     except Exception:
         # 异常情况，检查是否为顶刊
         if is_top_tier:
-            from backend.config import Config
+            from backend.core.config import Config
             if Config.ENABLE_TOP_TIER_DATE_TOLERANCE:
                 import logging
                 logger = logging.getLogger(__name__)

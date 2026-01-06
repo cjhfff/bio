@@ -4,7 +4,6 @@ from .logging import setup_logging, get_logger
 from .scoring import score_paper
 from .ranking import rank_and_select, get_item_id
 from .filtering import filter_papers
-from .deduplication import deduplicate_papers
 
 __all__ = [
     'Config',
@@ -14,5 +13,4 @@ __all__ = [
     'rank_and_select',
     'get_item_id',
     'filter_papers',
-    'deduplicate_papers'
 ]

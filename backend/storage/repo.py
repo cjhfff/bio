@@ -8,8 +8,8 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any, Set
 from backend.models import Paper, ScoredPaper
 from backend.storage.db import get_db
-from backend.deduplication import generate_title_fingerprint
-from backend.config import Config
+from backend.core.deduplication import generate_title_fingerprint
+from backend.core.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -212,7 +212,7 @@ class PaperRepository:
     
     def _get_item_id(self, paper: Paper) -> str:
         """获取item_id（使用deduplication模块的统一逻辑）"""
-        from backend.deduplication import get_item_id
+        from backend.core.deduplication import get_item_id
         return get_item_id(paper)
     
     def get_run_history(self, limit: int = 10) -> List[Dict[str, Any]]:

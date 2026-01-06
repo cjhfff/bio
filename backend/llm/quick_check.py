@@ -6,7 +6,7 @@ import time
 from typing import Optional
 from openai import OpenAI
 from backend.models import Paper
-from backend.config import Config
+from backend.core.config import Config
 
 logger = logging.getLogger(__name__)
 

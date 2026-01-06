@@ -1,4 +1,4 @@
 """Data models"""
-from .paper import Paper, ScoredPaper, ScoreReason
+from .paper import Paper, ScoredPaper, ScoreReason, SourceResult
 
-__all__ = ['Paper', 'ScoredPaper', 'ScoreReason']
+__all__ = ['Paper', 'ScoredPaper', 'ScoreReason', 'SourceResult']

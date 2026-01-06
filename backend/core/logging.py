@@ -5,7 +5,7 @@ import logging
 import sys
 from pathlib import Path
 from datetime import datetime
-from backend.config import Config
+from backend.core.config import Config
 
 def setup_logging(run_id: str = None):
     """

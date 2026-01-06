@@ -4,7 +4,7 @@
 from abc import ABC, abstractmethod
 from typing import List
 from backend.models import Paper, SourceResult
-from backend.deduplication import get_item_id
+from backend.core.deduplication import get_item_id
 
 
 class BaseSource(ABC):
@@ -40,7 +40,7 @@ class BaseSource(ABC):
         Returns:
             str: 标准化后的链接
         """
-        from backend.deduplication import normalize_link
+        from backend.core.deduplication import normalize_link
         return normalize_link(link)
     
     def _generate_link_hash(self, link: str) -> str:
@@ -55,7 +55,7 @@ class BaseSource(ABC):
         Returns:
             str: 哈希值
         """
-        from backend.deduplication import generate_link_hash
+        from backend.core.deduplication import generate_link_hash
         return generate_link_hash(link)
     
     def get_item_id(self, paper: Paper) -> str:
