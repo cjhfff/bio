@@ -4,9 +4,9 @@
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 from typing import List
-from app.models import Paper, ScoredPaper
-from app.llm.generator import generate_batch_report, generate_final_summary, prepare_papers_for_llm
-from app.scoring import ScoreReason
+from backend.models import Paper, ScoredPaper
+from backend.llm.generator import generate_batch_report, generate_final_summary, prepare_papers_for_llm
+from backend.scoring import ScoreReason
 import datetime
 
 

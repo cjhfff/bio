@@ -5,8 +5,8 @@ import os
 import json
 import logging
 from pathlib import Path
-from app.storage import init_db, PaperRepository
-from app.logging import setup_logging, get_logger
+from backend.storage import init_db, PaperRepository
+from backend.logging import setup_logging, get_logger
 
 logger = get_logger(__name__)
 
@@ -28,7 +28,7 @@ def migrate_sent_list():
             item_id = line.strip()
         if item_id and item_id not in sent_ids:
                 # 创建虚拟Paper用于保存
-                from app.models import Paper
+                from backend.models import Paper
                 paper = Paper(
                     title="迁移数据",
                     abstract="",
@@ -39,7 +39,7 @@ def migrate_sent_list():
                 )
                 # 直接插入dedup_keys（因为paper可能不存在）
                 try:
-                    from app.storage.db import get_db
+                    from backend.storage.db import get_db
                     with get_db() as conn:
                         cursor = conn.cursor()
                         # 先创建虚拟paper
@@ -82,7 +82,7 @@ def migrate_sent_meta():
                     continue
                 
                 # 创建Paper对象
-                from app.models import Paper
+                from backend.models import Paper
                 paper = Paper(
                     title=data.get('title', ''),
                     abstract='',

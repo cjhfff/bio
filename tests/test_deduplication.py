@@ -3,8 +3,8 @@ app/deduplication.py 模块的单元测试
 """
 import unittest
 from unittest.mock import patch
-from app.models import Paper
-from app.deduplication import normalize_link, generate_link_hash, get_item_id
+from backend.models import Paper
+from backend.deduplication import normalize_link, generate_link_hash, get_item_id
 
 
 class TestNormalizeLink(unittest.TestCase):
