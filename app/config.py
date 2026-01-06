@@ -76,7 +76,15 @@ class Config:
             "NLR", "NLR receptor", "NLR complex", "resistosome",
             "RPP", "ATR", "effector recognition", "effector-triggered immunity",
             "CPK", "calcium-dependent protein kinase", "CDPK",
-            "plant immune receptor", "immune signaling", "plant immunity receptor"
+            "plant immune receptor", "immune signaling", "plant immunity receptor",
+            # 细胞膜表面受体/PRR 介导的 PTI（补充：用户研究方向）
+            "cell surface receptor", "plasma membrane receptor", "membrane receptor",
+            "pattern-triggered immunity", "pattern triggered immunity", "pti",
+            "pattern recognition receptor", "PRR",
+            "FLS2", "EFR", "BAK1", "SERK", "BIK1",
+            "flagellin", "flg22", "elf18",
+            "ROS burst", "oxidative burst", "callose deposition",
+            "MAPK cascade", "MPK3", "MPK6"
         ],
         "Enzyme_Mechanism": [
             # 酶结构与机制核心词
@@ -151,7 +159,7 @@ class Config:
     ENABLE_LINK_HASH_DEDUP = os.getenv("ENABLE_LINK_HASH_DEDUP", "True") == "True"
     
     # 研究方向描述
-    RESEARCH_INTEREST = "生物固氮、胞外信号感知与传递、酶的结构与作用机制（仅限这三个研究方向）"
+    RESEARCH_INTEREST = "生物固氮、胞外信号感知与传递（含细胞膜表面受体/PRR 介导的 PTI 等植物免疫信号）、酶的结构与作用机制（仅限这三个研究方向）"
     
     # 邮件配置
     SENDER_EMAIL = os.getenv("SENDER_EMAIL", "")
@@ -220,7 +228,15 @@ class Config:
     # 信号转导核心词（8分/词）
     SIGNAL_KEYWORDS = [
         'signal transduction', 'receptor kinase', 'ligand', 'phosphorylation', 
-        'signaling pathway', 'receptor-like kinase', 'rlk', 'two-component system'
+        'signaling pathway', 'receptor-like kinase', 'rlk', 'two-component system',
+        # PTI/细胞膜表面受体（补充：提高该方向命中率）
+        'pattern-triggered immunity', 'pattern triggered immunity', 'pti',
+        'pattern recognition receptor', 'prr',
+        'cell surface receptor', 'plasma membrane receptor',
+        'fls2', 'efr', 'bak1', 'serk', 'bik1',
+        'flg22', 'elf18',
+        'mapk', 'mpk3', 'mpk6',
+        'ros burst', 'callose deposition'
     ]
     
     # 结构突破组合词（15分固定加分）
