@@ -83,7 +83,7 @@ docker-compose up -d
 - 前端界面: http://\<服务器IP\>:3000
 - 后端API: http://\<服务器IP\>:8000
 
-> 💡 **如何访问？** 详见 [访问地址说明](docs/如何访问.md)
+> 💡 **如何访问？** 详见 [访问地址说明](docs/如何访问.md) 或 [ACCESS_GUIDE.md](docs/ACCESS_GUIDE.md)
 
 ### 手动安装
 
