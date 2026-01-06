@@ -28,7 +28,7 @@ def quick_relevance_check(paper: Paper, max_retries: int = 2) -> Optional[bool]:
     prompt = f"""请快速判断以下论文是否属于以下三个研究方向之一：
 
 1. 生物固氮（Biological Nitrogen Fixation）
-2. 胞外信号感知与传递（Extracellular Signal Perception and Transduction）
+2. 胞外信号感知与传递（Extracellular Signal Perception and Transduction，包含细胞膜表面受体/PRR/RLK 介导的 PTI 等植物免疫信号）
 3. 酶的结构与作用机制（Enzyme Structure and Mechanism）
 
 **论文信息：**
