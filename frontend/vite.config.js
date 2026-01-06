@@ -11,10 +11,11 @@ export default defineConfig({
     }
   },
   server: {
+    host: '0.0.0.0',  // Enable remote access
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://backend:8000',  // Use service name in Docker
         changeOrigin: true
       }
     }

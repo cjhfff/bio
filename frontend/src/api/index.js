@@ -67,5 +67,18 @@ export default {
   // Logs (to be implemented)
   getLogs(params) {
     return instance.get('/logs', { params })
+  },
+  
+  // Schedule management
+  getSchedule() {
+    return instance.get('/schedule')
+  },
+  
+  updateSchedule(schedule) {
+    return instance.put('/schedule', schedule)
+  },
+  
+  getCronExamples() {
+    return instance.get('/schedule/cron-examples')
   }
 }

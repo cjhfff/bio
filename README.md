@@ -9,6 +9,7 @@
 - **AI报告生成**：使用DeepSeek API生成每日情报内参
 - **多渠道推送**：支持PushPlus、邮件、企业微信
 - **Web管理界面**：Vue 3 + Element Plus 前端，实时监控和管理
+- **远程访问支持**：支持远程访问和控制，可在线调整配置和管理定时任务
 - **可靠存储**：SQLite数据库，支持审计和回溯
 - **性能优化**：连接池、缓存、重试机制、速率限制
 
@@ -73,8 +74,16 @@ docker-compose up -d
 ```
 
 3. 访问管理界面：
+
+**本地访问：**
 - 前端界面: http://localhost:3000
 - 后端API: http://localhost:8000
+
+**远程访问：**
+- 前端界面: http://\<服务器IP\>:3000
+- 后端API: http://\<服务器IP\>:8000
+
+> 💡 **如何访问？** 详见 [访问地址说明](docs/如何访问.md) 或 [ACCESS_GUIDE.md](docs/ACCESS_GUIDE.md)
 
 ### 手动安装
 
@@ -97,14 +106,16 @@ cp .env.example .env
 
 4. 启动后端API：
 ```bash
-python -m uvicorn backend.api.main:app --reload
+python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 ```
 
 5. 启动前端开发服务器：
 ```bash
 cd frontend
-npm run dev
+npm run dev -- --host 0.0.0.0
 ```
+
+6. 访问系统：打开浏览器访问 http://localhost:3000 （本地）或 http://\<服务器IP\>:3000 （远程）
 
 ## 💻 使用方法
 
@@ -127,12 +138,23 @@ python -m backend run --window-days 14 --top-k 10
 
 ### Web管理界面
 
-访问 http://localhost:3000 使用Web管理界面：
+访问 http://localhost:3000 （或通过服务器IP远程访问）使用Web管理界面：
 
 - **仪表盘**：查看统计数据和最近运行记录
 - **论文管理**：浏览和管理论文数据
-- **配置中心**：管理关键词、评分规则、数据源
+- **配置中心**：管理关键词、评分规则、数据源、推送设置
+- **定时任务**：配置和管理自动运行任务
 - **日志查看**：实时查看系统日志
+
+### 远程访问和管理
+
+系统支持远程访问和控制：
+
+- **远程配置**：通过Web界面或API远程调整系统配置
+- **定时任务管理**：在线配置定时任务，自动执行推送
+- **远程触发**：随时通过Web界面或API触发推送任务
+
+详细配置说明请参考 [远程访问配置指南](docs/REMOTE_ACCESS.md)
 
 ### API接口
 

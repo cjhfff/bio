@@ -25,6 +25,10 @@
               <el-icon><Setting /></el-icon>
               <span>配置中心</span>
             </el-menu-item>
+            <el-menu-item index="/schedule">
+              <el-icon><Clock /></el-icon>
+              <span>定时任务</span>
+            </el-menu-item>
             <el-menu-item index="/logs">
               <el-icon><List /></el-icon>
               <span>日志查看</span>
@@ -50,6 +54,7 @@
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+import { DataLine, Document, Setting, Clock, List } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const activeMenu = computed(() => route.path)
