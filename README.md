@@ -74,8 +74,16 @@ docker-compose up -d
 ```
 
 3. 访问管理界面：
-- 前端界面: http://localhost:3000 （或 http://<your-server-ip>:3000）
-- 后端API: http://localhost:8000 （或 http://<your-server-ip>:8000）
+
+**本地访问：**
+- 前端界面: http://localhost:3000
+- 后端API: http://localhost:8000
+
+**远程访问：**
+- 前端界面: http://\<服务器IP\>:3000
+- 后端API: http://\<服务器IP\>:8000
+
+> 💡 **如何访问？** 详见 [访问地址说明](docs/如何访问.md)
 
 ### 手动安装
 
@@ -98,14 +106,16 @@ cp .env.example .env
 
 4. 启动后端API：
 ```bash
-python -m uvicorn backend.api.main:app --reload
+python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 ```
 
 5. 启动前端开发服务器：
 ```bash
 cd frontend
-npm run dev
+npm run dev -- --host 0.0.0.0
 ```
+
+6. 访问系统：打开浏览器访问 http://localhost:3000 （本地）或 http://\<服务器IP\>:3000 （远程）
 
 ## 💻 使用方法
 
