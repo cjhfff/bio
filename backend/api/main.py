@@ -2,6 +2,7 @@
 FastAPI 服务：提供API接口
 """
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any
 import asyncio
@@ -11,9 +12,30 @@ from backend.core.logging import setup_logging, get_logger
 from backend.storage import init_db, PaperRepository
 from backend.cli import run_push_task, test_sources
 
+# Import routes
+from backend.api.routes import papers, config, logs
+
 logger = get_logger(__name__)
 
-app = FastAPI(title="智能论文推送系统API", version="1.0.0")
+app = FastAPI(
+    title="智能论文推送系统API",
+    version="2.0.0",
+    description="Bio Paper Push System - Intelligent paper recommendation and push service"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify exact origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(papers.router, prefix="/api")
+app.include_router(config.router, prefix="/api")
+app.include_router(logs.router, prefix="/api")
 
 
 @app.on_event("startup")
@@ -27,7 +49,17 @@ async def startup():
 @app.get("/")
 async def root():
     """根路径"""
-    return {"message": "智能论文推送系统API", "version": "1.0.0"}
+    return {
+        "message": "智能论文推送系统API",
+        "version": "2.0.0",
+        "docs": "/docs"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """健康检查"""
+    return {"status": "healthy"}
 
 
 @app.post("/api/run")
