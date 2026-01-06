@@ -3,7 +3,7 @@ RSS 数据源 DOI 提取功能的单元测试
 """
 import unittest
 from unittest.mock import Mock
-from app.sources.rss import RSSSource
+from backend.sources.rss import RSSSource
 
 
 class TestRSSDOIExtraction(unittest.TestCase):

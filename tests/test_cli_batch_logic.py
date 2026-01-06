@@ -3,8 +3,8 @@ CLI批处理逻辑测试用例
 """
 import unittest
 from unittest.mock import Mock, patch, MagicMock
-from app.cli import run_push_task
-from app.models import Paper, SourceResult
+from backend.cli import run_push_task
+from backend.models import Paper, SourceResult
 
 
 class TestCLIBatchLogic(unittest.TestCase):
@@ -42,8 +42,8 @@ class TestCLIBatchLogic(unittest.TestCase):
         
         # 模拟评分
         with patch('app.cli.score_paper') as mock_score:
-            from app.models import ScoredPaper
-            from app.scoring import ScoreReason
+            from backend.models import ScoredPaper
+            from backend.scoring import ScoreReason
             mock_score.side_effect = lambda p: ScoredPaper(
                 paper=p,
                 score=100.0,

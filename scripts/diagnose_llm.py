@@ -167,7 +167,7 @@ def check_backup_api_keys() -> List[str]:
     
     # 从配置类读取（包括硬编码的备用密钥）
     try:
-        from app.config import Config
+        from backend.config import Config
         all_keys = Config.get_all_api_keys()
         backup_keys = Config.get_backup_api_keys()
         
@@ -226,7 +226,7 @@ def main():
     proxy_settings = check_proxy_settings()
     
     # 3. 获取 API 密钥
-    from app.config import Config
+    from backend.config import Config
     api_key = Config.DEEPSEEK_API_KEY
     
     # 4. 测试 API 密钥

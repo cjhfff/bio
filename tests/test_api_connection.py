@@ -4,10 +4,10 @@ API连接稳定性测试用例
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 import time
-from app.config import Config
-from app.llm.generator import generate_batch_report
-from app.models import Paper, ScoredPaper
-from app.scoring import ScoreReason
+from backend.config import Config
+from backend.llm.generator import generate_batch_report
+from backend.models import Paper, ScoredPaper
+from backend.scoring import ScoreReason
 
 
 class TestAPIConnection(unittest.TestCase):

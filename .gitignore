@@ -5,7 +5,14 @@ logs/
 __pycache__/
 *.py[cod]
 *.so
+*.pyo
+*.pyd
+*$py.class
 .Python
+*.egg-info/
+dist/
+build/
+*.egg
 
 # Database
 *.db
@@ -14,4 +21,40 @@ __pycache__/
 # Environment
 .env
 .venv
+venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data directory
+data/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.nuxt/
+frontend/.output/
+frontend/.cache/
+
+# Reports (keep structure, ignore content)
+reports/*.txt
+reports/*.html
+!reports/.gitkeep
+
+# Temporary files
+tmp/
+*.tmp
+
+# Cache
+.cache/
+*.cache
 
