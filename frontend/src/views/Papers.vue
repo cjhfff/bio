@@ -39,7 +39,7 @@
         <el-table-column label="操作" width="150">
           <template #default="{ row }">
             <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
-            <el-button type="danger" link>删除</el-button>
+            <el-button v-if="isAdmin" type="danger" link @click="deletePaper(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -59,9 +59,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { Search } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
 
 const papers = ref([])
@@ -70,6 +70,29 @@ const searchQuery = ref('')
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+
+// 获取当前用户信息
+const currentUser = ref(null)
+const isAdmin = computed(() => currentUser.value?.role === 'admin')
+
+// 加载用户信息
+const loadCurrentUser = async () => {
+  try {
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      currentUser.value = JSON.parse(userStr)
+    } else {
+      // 尝试从 API 获取
+      const response = await api.getCurrentUser()
+      if (response.status === 'success' && response.user) {
+        currentUser.value = response.user
+        localStorage.setItem('user', JSON.stringify(response.user))
+      }
+    }
+  } catch (error) {
+    console.error('获取用户信息失败:', error)
+  }
+}
 
 const loadPapers = async () => {
   loading.value = true
@@ -86,17 +109,63 @@ const loadPapers = async () => {
       total.value = response.data.total || 0
     }
   } catch (error) {
-    // For now, show sample data
-    ElMessage.warning('论文管理API开发中，显示示例数据')
-    papers.value = generateSamplePapers()
-    total.value = papers.value.length
+    ElMessage.error('加载论文失败: ' + (error.message || '未知错误'))
+    papers.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
 }
 
 const viewDetail = (paper) => {
-  ElMessage.info('详情功能开发中...')
+  // 显示论文详情对话框
+  ElMessageBox.alert(
+    `<div style="text-align: left;">
+      <p><strong>标题:</strong> ${paper.title}</p>
+      <p><strong>摘要:</strong> ${paper.abstract || '无摘要'}</p>
+      <p><strong>来源:</strong> ${paper.source}</p>
+      <p><strong>日期:</strong> ${paper.date}</p>
+      <p><strong>评分:</strong> ${paper.score}</p>
+      ${paper.link ? `<p><strong>链接:</strong> <a href="${paper.link}" target="_blank">${paper.link}</a></p>` : ''}
+    </div>`,
+    '论文详情',
+    {
+      dangerouslyUseHTMLString: true,
+      confirmButtonText: '关闭'
+    }
+  )
+}
+
+const deletePaper = async (paper) => {
+  // 权限检查
+  if (!isAdmin.value) {
+    ElMessage.warning('只有管理员可以删除论文')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除论文 "${paper.title.substring(0, 50)}..." 吗？`,
+      '确认删除',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    loading.value = true
+    await api.deletePaper(paper.id)
+    ElMessage.success('论文已删除')
+    loadPapers()
+  } catch (error) {
+    if (error !== 'cancel') {
+      const errorMsg = error.response?.data?.detail || error.message || '未知错误'
+      ElMessage.error('删除失败: ' + errorMsg)
+    }
+  } finally {
+    loading.value = false
+  }
 }
 
 const generateSamplePapers = () => {
@@ -123,6 +192,7 @@ const generateSamplePapers = () => {
 }
 
 onMounted(() => {
+  loadCurrentUser()
   loadPapers()
 })
 </script>

@@ -105,8 +105,8 @@ class RSSSource(BaseSource):
                 rss_response = requests.get(url, timeout=30, proxies={'http': None, 'https': None})
                 feed = feedparser.parse(rss_response.content)
                 
-                # 增加每个源的获取数量：5 -> 15
-                for entry in feed.entries[:15]:
+                # 移除数量限制，处理所有条目以确保不遗漏
+                for entry in feed.entries:
                     title_lower = entry.title.lower()
                     summary_lower = entry.get('summary', '').lower()
                     text_to_search = title_lower + " " + summary_lower

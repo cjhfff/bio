@@ -1,10 +1,11 @@
 """
 Papers management routes
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional, List
 import logging
 from backend.storage import PaperRepository
+from backend.core.security import require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +32,13 @@ async def get_papers(
     """
     try:
         repo = PaperRepository()
-        
-        # This would need to be implemented in the repository
-        # For now, return a stub
-        papers = []
-        total = 0
+        papers, total = repo.get_papers(
+            page=page,
+            page_size=page_size,
+            search=search,
+            source=source,
+            min_score=min_score
+        )
         
         return {
             "status": "success",
@@ -56,8 +59,12 @@ async def get_paper(paper_id: str):
     """Get a specific paper by ID"""
     try:
         repo = PaperRepository()
-        # This would need to be implemented
-        paper = None
+        try:
+            paper_id_int = int(paper_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid paper ID")
+        
+        paper = repo.get_paper_by_id(paper_id_int)
         
         if not paper:
             raise HTTPException(status_code=404, detail="Paper not found")
@@ -71,13 +78,23 @@ async def get_paper(paper_id: str):
 
 
 @router.delete("/{paper_id}")
-async def delete_paper(paper_id: str):
-    """Delete a paper"""
+async def delete_paper(paper_id: str, admin: dict = Depends(require_admin)):
+    """Delete a paper (Admin only)"""
     try:
         repo = PaperRepository()
-        # This would need to be implemented
+        try:
+            paper_id_int = int(paper_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid paper ID")
+        
+        success = repo.delete_paper(paper_id_int)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Paper not found")
         
         return {"status": "success", "message": "Paper deleted"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to delete paper {paper_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

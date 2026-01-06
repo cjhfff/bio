@@ -62,20 +62,39 @@ class PubMedSource(BaseSource):
             
             combined_query = f"({q_nitro} OR {q_signal} OR {q_enzyme}) AND (\"{start_date}\"[Date - Publication] : \"{yesterday}\"[Date - Publication])"
             
-            # 搜索
-            handle = Entrez.esearch(db="pubmed", term=combined_query, retmax=100, retmode="xml")
+            # 搜索 - 先获取总数
+            handle = Entrez.esearch(db="pubmed", term=combined_query, retmax=0, retmode="xml")
             record = Entrez.read(handle)
-            id_list = record.get("IdList", [])
+            total_count = int(record.get("Count", 0))
             
-            if not id_list:
+            logger.info(f"PubMed 查询返回: 总命中 {total_count} 篇")
+            
+            if total_count == 0:
                 return SourceResult(source_name=self.name, papers=[])
             
-            # 获取详细信息
-            handle = Entrez.efetch(db="pubmed", id=",".join(id_list), rettype="abstract", retmode="xml")
-            records = Entrez.read(handle)
+            # 分页获取所有ID（每批100个）
+            all_id_list = []
+            batch_size = 100
+            for start in range(0, total_count, batch_size):
+                handle = Entrez.esearch(db="pubmed", term=combined_query, retstart=start, retmax=batch_size, retmode="xml")
+                record = Entrez.read(handle)
+                batch_ids = record.get("IdList", [])
+                all_id_list.extend(batch_ids)
+                logger.debug(f"PubMed 已获取 {len(all_id_list)}/{total_count} 篇论文ID")
+            
+            logger.info(f"PubMed 共获取 {len(all_id_list)} 篇论文ID，开始获取详细信息")
+            
+            # 分批获取详细信息（每批100个，避免单次请求过大）
+            all_records = []
+            for i in range(0, len(all_id_list), batch_size):
+                batch_ids = all_id_list[i:i+batch_size]
+                handle = Entrez.efetch(db="pubmed", id=",".join(batch_ids), rettype="abstract", retmode="xml")
+                batch_records = Entrez.read(handle)
+                all_records.extend(batch_records.get('PubmedArticle', []))
+                logger.debug(f"PubMed 已获取 {len(all_records)}/{len(all_id_list)} 篇论文详细信息")
             
             papers = []
-            for article in records.get('PubmedArticle', []):
+            for article in all_records:
                 stat["total"] += 1
                 try:
                     medline_cit = article['MedlineCitation']

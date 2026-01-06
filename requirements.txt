@@ -13,6 +13,11 @@ python-dotenv>=1.0.0
 # API服务
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# 安全与认证
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
 
 # 其他
 email-validator>=2.1.0
@@ -22,6 +27,9 @@ tiktoken>=0.5.0
 
 # Performance
 urllib3>=2.0.0  # For connection pooling
+
+# Task Scheduler
+APScheduler>=3.10.0  # For scheduled tasks
 
 
 

@@ -52,8 +52,10 @@ def run_push_task(window_days: int = None, top_k: int = None):
     logger.info(f"运行ID: {run_id}")
     
     try:
-        # 不进行去重，每次运行都处理所有检索到的论文
-        logger.info("模式：每次运行处理所有检索到的论文（不进行去重）")
+        # 获取已处理的论文ID（去重用），避免多次点击导致重复计数
+        logger.info("正在获取已处理论文ID以进行去重...")
+        sent_ids = repo.get_sent_ids()
+        logger.info(f"已处理 {len(sent_ids)} 篇论文")
         
         # 定义数据源
         # 注：暂时禁用 Semantic Scholar（API限流严重）和 ScienceNews（RSS源失效）
@@ -67,13 +69,14 @@ def run_push_task(window_days: int = None, top_k: int = None):
             # SemanticScholarSource(window_days),  # 暂时禁用：API限流严重，导致超时
         ]
         
-        # 并发抓取（传入空集合，不进行去重）
+        # 并发抓取（传入已存在的ID进行去重，避免重复计数）
         logger.info("\n开始并发抓取数据...")
         source_results = []
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(sources)) as executor:
             future_to_source = {
-                executor.submit(source.fetch, set(), Config.EXCLUDE_KEYWORDS): source
+                # 传入 repo.get_sent_ids() 获取的集合
+                executor.submit(source.fetch, sent_ids, Config.EXCLUDE_KEYWORDS): source
                 for source in sources
             }
             

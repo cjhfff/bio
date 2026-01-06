@@ -4,7 +4,8 @@
 import sqlite3
 from pathlib import Path
 
-db_path = Path("data/paper_push.db")
+# Update path to match Config.DB_PATH
+db_path = Path("data/database/paper_push.db")
 
 if not db_path.exists():
     print("数据库文件不存在")

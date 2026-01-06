@@ -266,4 +266,159 @@ class PaperRepository:
                 }
                 for row in rows
             ]
+    
+    def get_papers(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        search: Optional[str] = None,
+        source: Optional[str] = None,
+        min_score: Optional[float] = None
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """
+        获取论文列表（支持分页、搜索、筛选）
+        返回: (论文列表, 总数)
+        """
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # 构建查询条件
+            conditions = []
+            params = []
+            
+            if search:
+                conditions.append("(p.title LIKE ? OR p.abstract LIKE ?)")
+                search_pattern = f"%{search}%"
+                params.extend([search_pattern, search_pattern])
+            
+            if source:
+                conditions.append("p.source = ?")
+                params.append(source)
+            
+            if min_score is not None:
+                # 需要关联 scores 表来筛选分数
+                conditions.append("""
+                    p.id IN (
+                        SELECT paper_id FROM scores 
+                        WHERE score >= ?
+                    )
+                """)
+                params.append(min_score)
+            
+            where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+            
+            # 获取总数
+            count_query = f"SELECT COUNT(DISTINCT p.id) FROM papers p {where_clause}"
+            cursor.execute(count_query, params)
+            total = cursor.fetchone()[0]
+            
+            # 获取分页数据（关联最新的评分）
+            offset = (page - 1) * page_size
+            query = f"""
+                SELECT DISTINCT
+                    p.id,
+                    p.item_id,
+                    p.title,
+                    p.abstract,
+                    p.date,
+                    p.source,
+                    p.doi,
+                    p.link,
+                    p.citation_count,
+                    p.influential_count,
+                    COALESCE(MAX(s.score), 0) as score
+                FROM papers p
+                LEFT JOIN scores s ON p.id = s.paper_id
+                {where_clause}
+                GROUP BY p.id
+                ORDER BY score DESC, p.created_at DESC
+                LIMIT ? OFFSET ?
+            """
+            params.extend([page_size, offset])
+            cursor.execute(query, params)
+            
+            rows = cursor.fetchall()
+            papers = [
+                {
+                    'id': row[0],
+                    'item_id': row[1],
+                    'title': row[2],
+                    'abstract': row[3] or '',
+                    'date': row[4] or '',
+                    'source': row[5] or '',
+                    'doi': row[6] or '',
+                    'link': row[7] or '',
+                    'citation_count': row[8] or 0,
+                    'influential_count': row[9] or 0,
+                    'score': row[10] or 0.0
+                }
+                for row in rows
+            ]
+            
+            return papers, total
+    
+    def get_paper_by_id(self, paper_id: int) -> Optional[Dict[str, Any]]:
+        """根据 ID 获取单篇论文"""
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT 
+                    p.id,
+                    p.item_id,
+                    p.title,
+                    p.abstract,
+                    p.date,
+                    p.source,
+                    p.doi,
+                    p.link,
+                    p.citation_count,
+                    p.influential_count,
+                    COALESCE(MAX(s.score), 0) as score
+                FROM papers p
+                LEFT JOIN scores s ON p.id = s.paper_id
+                WHERE p.id = ?
+                GROUP BY p.id
+            """, (paper_id,))
+            
+            row = cursor.fetchone()
+            if not row:
+                return None
+            
+            return {
+                'id': row[0],
+                'item_id': row[1],
+                'title': row[2],
+                'abstract': row[3] or '',
+                'date': row[4] or '',
+                'source': row[5] or '',
+                'doi': row[6] or '',
+                'link': row[7] or '',
+                'citation_count': row[8] or 0,
+                'influential_count': row[9] or 0,
+                'score': row[10] or 0.0
+            }
+    
+    def delete_paper(self, paper_id: int) -> bool:
+        """删除论文（级联删除相关记录）"""
+        with get_db() as conn:
+            cursor = conn.cursor()
+            try:
+                # 先获取 item_id
+                cursor.execute("SELECT item_id FROM papers WHERE id = ?", (paper_id,))
+                row = cursor.fetchone()
+                if not row:
+                    return False
+                
+                item_id = row[0]
+                
+                # 删除相关记录（级联）
+                cursor.execute("DELETE FROM scores WHERE paper_id = ?", (paper_id,))
+                cursor.execute("DELETE FROM pushes WHERE paper_id = ?", (paper_id,))
+                cursor.execute("DELETE FROM dedup_keys WHERE paper_id = ?", (paper_id,))
+                cursor.execute("DELETE FROM papers WHERE id = ?", (paper_id,))
+                
+                return True
+            except Exception as e:
+                logger.error(f"删除论文失败: {e}")
+                return False
 

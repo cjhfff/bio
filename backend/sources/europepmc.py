@@ -33,24 +33,51 @@ class EuropePMCSource(BaseSource):
             
             # 构建查询（使用OR连接三个方向，更宽松）
             query = f'FIRST_PDATE:[{start_date} TO {yesterday}] AND ({q_nitro} OR {q_signal} OR {q_enzyme})'
-            url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={query}&format=json&pageSize=50"
             
-            # 添加调试日志
-            logger.debug(f"EuropePMC 查询URL: {url}")
-            logger.debug(f"EuropePMC 查询条件: {query}")
+            # 先获取总数
+            first_url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={query}&format=json&pageSize=1"
+            first_response = requests.get(first_url, timeout=30, proxies={'http': None, 'https': None})
+            first_response.raise_for_status()
+            total_hits = first_response.json().get('hitCount', 0)
             
-            # 明确禁用代理
-            response = requests.get(url, timeout=30, proxies={'http': None, 'https': None})
-            response.raise_for_status()
-            data = response.json().get('resultList', {}).get('result', [])
+            logger.info(f"EuropePMC 查询返回: 总命中 {total_hits} 篇")
             
-            # 记录查询结果
-            total_hits = response.json().get('hitCount', 0)
-            logger.info(f"EuropePMC 查询返回: 总命中 {total_hits} 篇，实际返回 {len(data)} 篇")
+            if total_hits == 0:
+                return SourceResult(source_name=self.name, papers=[])
+            
+            # 分页获取所有结果（每页50个）
+            all_data = []
+            page_size = 50
+            page_num = 1
+            while len(all_data) < total_hits:
+                url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={query}&format=json&pageSize={page_size}&page={page_num}"
+                
+                # 添加调试日志
+                if page_num == 1:
+                    logger.debug(f"EuropePMC 查询URL: {url}")
+                    logger.debug(f"EuropePMC 查询条件: {query}")
+                
+                # 明确禁用代理
+                response = requests.get(url, timeout=30, proxies={'http': None, 'https': None})
+                response.raise_for_status()
+                page_data = response.json().get('resultList', {}).get('result', [])
+                if not page_data:
+                    break
+                all_data.extend(page_data)
+                logger.debug(f"EuropePMC 已获取 {len(all_data)}/{total_hits} 篇论文")
+                
+                # 如果返回的数据少于page_size，说明已经是最后一页
+                if len(page_data) < page_size:
+                    break
+                
+                # 继续下一页
+                page_num += 1
+            
+            logger.info(f"EuropePMC 共获取 {len(all_data)} 篇论文")
             
             papers = []
             
-            for r in data:
+            for r in all_data:
                 title = r.get('title', '无标题')
                 abstract = r.get('abstractText', '')
                 

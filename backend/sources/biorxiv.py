@@ -88,10 +88,16 @@ class BioRxivSource(BaseSource):
         从 bioRxiv 获取论文（支持动态分页、诊断日志、豁免机制、重试机制）
         """
         try:
-            # 只检索前一天的论文（不包括今天）
-            yesterday = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-            start_date = yesterday
-            start_date_obj = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+            # 计算日期范围：默认为前一天（符合每日定时任务需求），但也支持通过 window_days 补抓历史数据
+            today = datetime.date.today()
+            # 结束日期设为昨天（不包含今天，确保数据完整性）
+            end_date_obj = today - datetime.timedelta(days=1)
+            end_date = end_date_obj.strftime("%Y-%m-%d")
+            
+            # 开始日期根据 window_days 计算（如果 window_days=1，则 start=end，严格符合"检索前一天"的要求）
+            # 这样设计的好处是：平时默认只抓昨天；但如果系统停机了一天，可以通过调大 window_days 来补抓漏掉的数据
+            start_date_obj = today - datetime.timedelta(days=self.window_days)
+            start_date = start_date_obj.strftime("%Y-%m-%d")
             
             papers = []
             all_keywords = Config.get_all_keywords()
@@ -115,10 +121,13 @@ class BioRxivSource(BaseSource):
                 "final": 0
             }
             
-            # 动态分页抓取
-            for page in range(self.max_pages):
+            # 动态分页抓取 - 移除页数限制，确保获取前一天的所有论文
+            page = 0
+            should_break = False
+            while True:  # 无限循环，直到没有更多数据或超出日期范围
                 cursor = page * PAGE_SIZE
-                url = f"https://api.biorxiv.org/details/biorxiv/{start_date}/{yesterday}/{cursor}"
+                # API 格式: details/server/interval/cursor 或 details/server/start_date/end_date/cursor
+                url = f"https://api.biorxiv.org/details/biorxiv/{start_date}/{end_date}/{cursor}"
                 
                 try:
                     # 使用带重试机制的抓取
@@ -232,14 +241,20 @@ class BioRxivSource(BaseSource):
                 
                 logger.debug(f"bioRxiv 第{page+1}页抓取完成，累计 {len(papers)} 条")
                 
+                # 如果应该提前终止（超出日期范围），结束循环
+                if should_break:
+                    break
+                
                 # 请求之间添加短暂延迟，避免请求过快导致连接被中断
-                if page < self.max_pages - 1:  # 最后一页不需要延迟
-                    time.sleep(0.5)  # 延迟0.5秒
+                time.sleep(0.5)  # 延迟0.5秒
                 
                 # 如果返回数据少于100条，说明已经是最后一页
                 if len(data) < PAGE_SIZE:
                     logger.debug(f"bioRxiv 第{page+1}页数据不足100条，停止抓取")
                     break
+                
+                # 继续下一页
+                page += 1
                 
                 # 早退机制
                 if should_break:

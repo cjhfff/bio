@@ -131,6 +131,20 @@ def init_db():
             )
         """)
         
+        # users表：用户信息
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                email TEXT,
+                role TEXT DEFAULT 'user',
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP
+            )
+        """)
+        
         # 创建索引
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_papers_item_id ON papers(item_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_papers_date ON papers(date)")
@@ -138,6 +152,7 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_scores_run_id ON scores(run_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_pushes_run_id ON pushes(run_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_pushes_status ON pushes(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
         
         conn.commit()
         logger.info(f"数据库初始化完成: {db_path}")

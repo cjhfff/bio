@@ -16,6 +16,14 @@ except ImportError:
 class Config:
     """统一配置类"""
     
+    # 安全配置 (JWT 和 Admin)
+    SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-please-change-it")
+    ALGORITHM = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7天
+    
+    ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")  # 简单默认密码，建议修改
+    
     # DeepSeek API
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-cab7a36ab0d14c9eb05267835dd886eb")
     DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
