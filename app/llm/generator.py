@@ -252,7 +252,7 @@ def generate_single_paper_report(scored_paper: ScoredPaper, paper_num: int) -> s
 
 **重要：检索范围仅限以下三个研究方向，其他方向的研究请忽略：**
 1. 生物固氮（Biological Nitrogen Fixation）
-2. 胞外信号感知与传递（Extracellular Signal Perception and Transduction）
+2. 胞外信号感知与传递（Extracellular Signal Perception and Transduction，包含细胞膜表面受体/PRR/RLK 介导的 PTI 等植物免疫信号）
 3. 酶的结构与作用机制（Enzyme Structure and Mechanism）
 
 **任务要求：**
@@ -416,7 +416,7 @@ def generate_final_summary(all_paper_reports: List[str], total_papers: int, sour
 
 **重要：检索范围仅限以下三个研究方向：**
 1. 生物固氮（Biological Nitrogen Fixation）
-2. 胞外信号感知与传递（Extracellular Signal Perception and Transduction）
+2. 胞外信号感知与传递（Extracellular Signal Perception and Transduction，包含细胞膜表面受体/PRR/RLK 介导的 PTI 等植物免疫信号）
 3. 酶的结构与作用机制（Enzyme Structure and Mechanism）
 
 **任务要求：**
@@ -615,7 +615,7 @@ def generate_daily_report(scored_papers: List[ScoredPaper], source_results: List
 
 **重要：检索范围仅限以下三个研究方向，其他方向的研究请忽略：**
 1. 生物固氮（Biological Nitrogen Fixation）
-2. 胞外信号感知与传递（Extracellular Signal Perception and Transduction）
+2. 胞外信号感知与传递（Extracellular Signal Perception and Transduction，包含细胞膜表面受体/PRR/RLK 介导的 PTI 等植物免疫信号）
 3. 酶的结构与作用机制（Enzyme Structure and Mechanism）
 
 研究方向：{Config.RESEARCH_INTEREST}
