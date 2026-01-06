@@ -1,6 +1,7 @@
 # 核心依赖
 requests>=2.31.0
 openai>=1.0.0
+httpx>=0.24.0  # Async HTTP client
 
 # 可选依赖（数据源）
 feedparser>=6.0.10  # RSS支持
@@ -18,6 +19,10 @@ email-validator>=2.1.0
 
 # Token精确计算
 tiktoken>=0.5.0
+
+# Performance
+urllib3>=2.0.0  # For connection pooling
+
 
 
 
