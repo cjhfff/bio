@@ -147,6 +147,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { VideoPlay } from '@element-plus/icons-vue'
 import api from '../api'
 
 const schedule = ref({

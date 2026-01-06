@@ -54,6 +54,7 @@
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+import { DataLine, Document, Setting, Clock, List } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const activeMenu = computed(() => route.path)
