@@ -13,7 +13,7 @@ from backend.storage import init_db, PaperRepository
 from backend.cli import run_push_task, test_sources
 
 # Import routes
-from backend.api.routes import papers, config, logs
+from backend.api.routes import papers, config, logs, schedule
 
 logger = get_logger(__name__)
 
@@ -36,6 +36,7 @@ app.add_middleware(
 app.include_router(papers.router, prefix="/api")
 app.include_router(config.router, prefix="/api")
 app.include_router(logs.router, prefix="/api")
+app.include_router(schedule.router, prefix="/api")
 
 
 @app.on_event("startup")

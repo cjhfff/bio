@@ -4,6 +4,8 @@ Configuration management routes
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
 import logging
+import os
+from pathlib import Path
 from backend.core.config import Config
 
 logger = logging.getLogger(__name__)
@@ -56,19 +58,62 @@ async def update_config(config: Dict[str, Any]):
     """
     Update configuration
     
-    Note: This is a stub. In a real implementation, you would:
-    1. Validate the configuration
-    2. Update the .env file or a config database
-    3. Reload the configuration
+    Updates the .env file with new configuration values.
+    Note: Some changes require service restart to take effect.
     """
     try:
-        # TODO: Implement configuration update logic
-        logger.info("Configuration update requested")
+        logger.info(f"Configuration update requested: {config}")
+        
+        # Find .env file path
+        env_path = Path.cwd() / ".env"
+        if not env_path.exists():
+            env_path = Path.cwd().parent / ".env"  # Try parent directory
+        
+        if not env_path.exists():
+            raise HTTPException(status_code=404, detail=".env file not found")
+        
+        # Read current .env content
+        with open(env_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        # Parse current env vars
+        env_vars = {}
+        for line in lines:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, value = line.split('=', 1)
+                env_vars[key.strip()] = value.strip()
+        
+        # Update values based on config
+        if 'general' in config:
+            if 'defaultWindowDays' in config['general']:
+                env_vars['DEFAULT_WINDOW_DAYS'] = str(config['general']['defaultWindowDays'])
+            if 'topK' in config['general']:
+                env_vars['TOP_K'] = str(config['general']['topK'])
+        
+        if 'push' in config:
+            if 'pushplusTokens' in config['push']:
+                tokens = config['push']['pushplusTokens']
+                if isinstance(tokens, list):
+                    env_vars['PUSHPLUS_TOKENS'] = ','.join(tokens)
+                else:
+                    env_vars['PUSHPLUS_TOKENS'] = str(tokens)
+            if 'email' in config['push']:
+                env_vars['RECEIVER_EMAIL'] = str(config['push']['email'])
+        
+        # Write back to .env file
+        with open(env_path, 'w', encoding='utf-8') as f:
+            for key, value in env_vars.items():
+                f.write(f"{key}={value}\n")
+        
+        logger.info("Configuration file updated successfully")
         
         return {
             "status": "success",
-            "message": "Configuration updated (note: changes require restart to take effect)"
+            "message": "Configuration updated successfully. Some changes may require restart to take effect."
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to update config: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
