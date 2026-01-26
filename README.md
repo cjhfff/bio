@@ -181,6 +181,20 @@ isort backend/
 mypy backend/
 ```
 
+## 🔄 代码更新
+
+如果你的项目已经在服务器上运行，需要更新代码时，请参考：
+
+- **[代码更新部署指南](docs/UPDATE_GUIDE.md)** - 详细的更新步骤、回滚方案和常见问题
+- **[服务器部署指南](docs/deploy.md)** - 初次部署和基础配置
+
+### 快速更新
+```bash
+# 使用自动化脚本
+cd /path/to/project
+bash scripts/update_server.sh
+```
+
 ## 📝 许可证
 
 MIT
