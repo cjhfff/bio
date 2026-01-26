@@ -4,7 +4,7 @@
   "description": "Frontend for Bio Paper Push System",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview"
   },
