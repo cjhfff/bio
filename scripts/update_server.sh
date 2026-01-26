@@ -46,6 +46,9 @@ echo "使用Docker: $USE_DOCKER"
 echo "========================================"
 echo ""
 
+# 检查root权限
+check_root
+
 # 询问确认
 read -p "是否继续更新? (y/n) " -n 1 -r
 echo
@@ -61,6 +64,10 @@ if [ ! -d "$PROJECT_DIR" ]; then
     exit 1
 fi
 cd "$PROJECT_DIR"
+
+# 保存当前版本（在更新前）
+OLD_COMMIT=$(git rev-parse HEAD)
+log_info "当前版本: $OLD_COMMIT"
 
 # 步骤2: 创建备份
 log_info "步骤2: 创建备份..."
@@ -87,9 +94,8 @@ else
     log_warn "未找到.env配置文件"
 fi
 
-# 备份当前git提交信息
-git rev-parse HEAD > "$BACKUP_PATH/git_commit.txt"
-log_info "当前版本: $(cat $BACKUP_PATH/git_commit.txt)"
+# 备份当前git提交信息（已在步骤1保存）
+echo "$OLD_COMMIT" > "$BACKUP_PATH/git_commit.txt"
 
 log_info "备份完成: $BACKUP_PATH"
 
