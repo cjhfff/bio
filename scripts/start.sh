@@ -7,7 +7,23 @@
 # 配置变量
 APP_PORT=8000
 LOG_DIR="logs"
-PYTHON_EXEC="python3"  # 根据服务器环境调整，如 python3.9
+
+# 自动检测 Python 版本（优先级：python3.9 > python3 > python）
+if [ -z "$PYTHON_EXEC" ]; then
+    if command -v python3.9 &> /dev/null; then
+        PYTHON_EXEC="python3.9"
+    elif command -v python3 &> /dev/null; then
+        PYTHON_EXEC="python3"
+    elif command -v python &> /dev/null; then
+        PYTHON_EXEC="python"
+    else
+        echo "❌ 错误: 未找到 Python 解释器！"
+        echo "请先运行: bash scripts/check_python.sh 查看可用的 Python 版本"
+        exit 1
+    fi
+fi
+
+echo "使用 Python: $PYTHON_EXEC ($($PYTHON_EXEC --version 2>&1))"
 
 # 创建日志目录
 mkdir -p $LOG_DIR

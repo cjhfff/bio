@@ -8,7 +8,24 @@
 APP_PORT=8000
 APP_NAME="bio-backend"
 LOG_DIR="logs"
-PYTHON_EXEC="python3" # 或者根据服务器环境指定路径，如 /usr/local/bin/python3.9
+
+# 自动检测 Python 版本（优先级：python3.9 > python3 > python）
+# 也可以通过环境变量手动指定: export PYTHON_EXEC="python3.9"
+if [ -z "$PYTHON_EXEC" ]; then
+    if command -v python3.9 &> /dev/null; then
+        PYTHON_EXEC="python3.9"
+    elif command -v python3 &> /dev/null; then
+        PYTHON_EXEC="python3"
+    elif command -v python &> /dev/null; then
+        PYTHON_EXEC="python"
+    else
+        echo "❌ 错误: 未找到 Python 解释器！"
+        echo "请先运行: bash scripts/check_python.sh 查看可用的 Python 版本"
+        exit 1
+    fi
+fi
+
+echo "使用 Python: $PYTHON_EXEC ($($PYTHON_EXEC --version 2>&1))"
 
 echo ">>> [1/5] 开始清理旧进程..."
 # 查找占用指定端口的进程并杀死
