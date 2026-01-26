@@ -76,15 +76,21 @@ BACKUP_PATH="$BACKUP_DIR/$BACKUP_DATE"
 mkdir -p "$BACKUP_PATH"
 
 # 备份数据库
+DB_PATH=""
 if [ -f "data/database/paper_push.db" ]; then
     log_info "备份数据库..."
     cp data/database/paper_push.db "$BACKUP_PATH/paper_push.db.backup"
+    DB_PATH="data/database/paper_push.db"
 elif [ -f "data/paper_push.db" ]; then
     log_info "备份数据库..."
     cp data/paper_push.db "$BACKUP_PATH/paper_push.db.backup"
+    DB_PATH="data/paper_push.db"
 else
     log_warn "未找到数据库文件"
 fi
+
+# 保存数据库路径信息
+echo "$DB_PATH" > "$BACKUP_PATH/db_path.txt"
 
 # 备份配置文件
 if [ -f ".env" ]; then
@@ -114,7 +120,8 @@ if [ "$USE_DOCKER" = "true" ]; then
 else
     log_info "停止Python进程..."
     # 查找并停止Python进程（谨慎操作）
-    PYTHON_PIDS=$(pgrep -f "python.*backend" || true)
+    # 使用更精确的模式匹配避免误杀其他进程
+    PYTHON_PIDS=$(pgrep -f "python.*backend.api.main\|python.*uvicorn.*backend.api" || true)
     if [ -n "$PYTHON_PIDS" ]; then
         log_info "发现运行中的进程: $PYTHON_PIDS"
         echo "$PYTHON_PIDS" | xargs kill 2>/dev/null || true
@@ -150,7 +157,9 @@ fi
 log_info "步骤7: 更新依赖..."
 
 # 检查requirements.txt是否有变化
-if git diff "$OLD_COMMIT" "$NEW_COMMIT" --name-only | grep -q "requirements.txt"; then
+CHANGED_FILES=$(git diff "$OLD_COMMIT" "$NEW_COMMIT" --name-only)
+
+if echo "$CHANGED_FILES" | grep -q "requirements.txt"; then
     log_info "requirements.txt有更新，安装新依赖..."
     pip3 install -r requirements.txt --upgrade
 else
@@ -159,7 +168,7 @@ fi
 
 # 更新前端依赖（如果有）
 if [ -f "frontend/package.json" ]; then
-    if git diff "$OLD_COMMIT" "$NEW_COMMIT" --name-only | grep -q "frontend/package.json"; then
+    if echo "$CHANGED_FILES" | grep -q "frontend/package.json"; then
         log_info "前端依赖有更新..."
         cd frontend
         npm install
@@ -210,6 +219,9 @@ if [ "$USE_DOCKER" = "true" ]; then
     cd ..
 else
     log_info "启动Python服务..."
+    # 确保logs目录存在
+    mkdir -p logs
+    
     # 启动API服务（如果有）
     if [ -f "backend/api/main.py" ]; then
         nohup python3 -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 > logs/api.log 2>&1 &
@@ -250,7 +262,11 @@ echo ""
 echo "如需回滚，请执行:"
 echo "  cd $PROJECT_DIR"
 echo "  git reset --hard $(cat $BACKUP_PATH/git_commit.txt)"
-echo "  cp $BACKUP_PATH/paper_push.db.backup data/database/paper_push.db"
+if [ -f "$BACKUP_PATH/db_path.txt" ] && [ -n "$(cat $BACKUP_PATH/db_path.txt)" ]; then
+    echo "  cp $BACKUP_PATH/paper_push.db.backup $(cat $BACKUP_PATH/db_path.txt)"
+else
+    echo "  # 数据库未备份或路径未知"
+fi
 echo "  # 然后重启服务"
 echo ""
 echo "查看日志:"
