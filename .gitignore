@@ -58,3 +58,9 @@ tmp/
 .cache/
 *.cache
 
+# Backups
+*.backup
+backup/
+backups/
+*.bak
+
