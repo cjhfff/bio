@@ -223,6 +223,66 @@ tar -czf bio_monitor_backup_$(date +%Y%m%d).tar.gz bio_monitor/
 scp root@192.3.28.35:/root/bio_monitor_backup_*.tar.gz ./
 ```
 
+## 代码更新
+
+### 快速更新（使用自动化脚本）
+```bash
+cd /root/bio_monitor
+bash scripts/update_server.sh
+```
+
+### 手动更新步骤
+1. **备份数据**
+```bash
+mkdir -p /root/backups/$(date +%Y%m%d)
+cp -r data/ /root/backups/$(date +%Y%m%d)/
+cp .env /root/backups/$(date +%Y%m%d)/
+```
+
+2. **停止服务**
+```bash
+# 停止运行的进程
+ps aux | grep python
+kill <PID>
+
+# 或停止Docker容器
+docker-compose down
+```
+
+3. **更新代码**
+```bash
+cd /root/bio_monitor
+git pull origin main
+pip3 install -r requirements.txt --upgrade
+```
+
+4. **重启服务**
+```bash
+# 重启Docker
+docker-compose up -d
+
+# 或重启Python服务
+nohup python3 -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 &
+```
+
+5. **验证更新**
+```bash
+# 查看日志
+tail -f logs/api.log
+
+# 测试服务
+python3 -m backend test-sources
+```
+
+### 更新注意事项
+- 更新前务必备份数据库和配置文件
+- 如果有新的配置项，需要更新`.env`文件
+- 如果有数据库结构变更，需要运行迁移脚本
+- 更新后检查日志确保服务正常运行
+- 保留备份至少7天，以便出问题时回滚
+
+**详细的更新指南请参考：[代码更新部署指南](./UPDATE_GUIDE.md)**
+
 
 
 
