@@ -145,15 +145,86 @@ def init_db():
             )
         """)
         
+        # 检查并添加latest_score字段(用于去除JOIN提升查询性能)
+        try:
+            cursor.execute("SELECT latest_score FROM papers LIMIT 1")
+        except Exception:
+            logger.info("添加latest_score字段到papers表")
+            cursor.execute("ALTER TABLE papers ADD COLUMN latest_score REAL DEFAULT 0")
+
         # 创建索引
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_papers_item_id ON papers(item_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_papers_date ON papers(date)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_papers_title_fp ON papers(title_fingerprint)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_papers_source ON papers(source)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_papers_latest_score ON papers(latest_score)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_scores_run_id ON scores(run_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_scores_paper_id ON scores(paper_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_pushes_run_id ON pushes(run_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_pushes_status ON pushes(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
-        
+
+        # 创建FTS5全文检索虚拟表（用于高性能标题/摘要搜索）
+        cursor.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS papers_fts USING fts5(
+                title,
+                abstract,
+                content='papers',
+                content_rowid='id',
+                tokenize='unicode61 remove_diacritics 2'
+            )
+        """)
+
+        # 创建触发器保持FTS5索引与papers表同步
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS papers_fts_insert AFTER INSERT ON papers BEGIN
+                INSERT INTO papers_fts(rowid, title, abstract)
+                VALUES (new.id, new.title, new.abstract);
+            END
+        """)
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS papers_fts_delete AFTER DELETE ON papers BEGIN
+                INSERT INTO papers_fts(papers_fts, rowid, title, abstract)
+                VALUES ('delete', old.id, old.title, old.abstract);
+            END
+        """)
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS papers_fts_update AFTER UPDATE ON papers BEGIN
+                INSERT INTO papers_fts(papers_fts, rowid, title, abstract)
+                VALUES ('delete', old.id, old.title, old.abstract);
+                INSERT INTO papers_fts(rowid, title, abstract)
+                VALUES (new.id, new.title, new.abstract);
+            END
+        """)
+
+        # 为已有数据重建FTS索引（仅在FTS表为空时执行）
+        cursor.execute("SELECT COUNT(*) FROM papers_fts")
+        fts_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM papers")
+        papers_count = cursor.fetchone()[0]
+        if papers_count > 0 and fts_count == 0:
+            logger.info(f"为 {papers_count} 篇已有论文重建FTS索引...")
+            cursor.execute("""
+                INSERT INTO papers_fts(rowid, title, abstract)
+                SELECT id, title, abstract FROM papers
+            """)
+            logger.info("FTS索引重建完成")
+
+        # 回填latest_score（仅在latest_score全为0或NULL时执行）
+        cursor.execute("SELECT COUNT(*) FROM papers WHERE latest_score > 0")
+        scored_count = cursor.fetchone()[0]
+        if papers_count > 0 and scored_count == 0:
+            cursor.execute("SELECT COUNT(*) FROM scores")
+            total_scores = cursor.fetchone()[0]
+            if total_scores > 0:
+                logger.info("回填papers.latest_score...")
+                cursor.execute("""
+                    UPDATE papers SET latest_score = COALESCE(
+                        (SELECT MAX(s.score) FROM scores s WHERE s.paper_id = papers.id), 0
+                    )
+                """)
+                logger.info("latest_score回填完成")
+
         conn.commit()
         logger.info(f"数据库初始化完成: {db_path}")
 

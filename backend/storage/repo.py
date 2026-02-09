@@ -1,6 +1,7 @@
 """
 数据仓库：论文、运行、评分、推送的CRUD操作
 """
+import re
 import json
 import uuid
 import logging
@@ -12,6 +13,46 @@ from backend.core.deduplication import generate_title_fingerprint
 from backend.core.config import Config
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_search_query(search: str) -> str:
+    """
+    将用户输入的搜索词转换为FTS5查询语法。
+    支持:
+      - 简单关键词: "nitrogen fixation" -> nitrogen fixation
+      - 双引号精确匹配: '"nitrogen fixation"' -> "nitrogen fixation"
+      - AND/OR/NOT 布尔操作: "nitrogen AND enzyme NOT cancer"
+      - 加减号: "+nitrogen -cancer" -> nitrogen NOT cancer
+    """
+    search = search.strip()
+    if not search:
+        return ""
+
+    # 如果用户已经在用FTS5语法（包含AND/OR/NOT/NEAR），直接使用
+    if re.search(r'\b(AND|OR|NOT|NEAR)\b', search):
+        return search
+
+    # 处理 +/- 前缀语法
+    tokens = []
+    # 先提取引号内的短语
+    parts = re.split(r'(".*?")', search)
+    for part in parts:
+        if part.startswith('"') and part.endswith('"'):
+            tokens.append(part)
+        else:
+            for word in part.split():
+                if word.startswith('-'):
+                    keyword = word[1:]
+                    if keyword:
+                        tokens.append(f'NOT {keyword}')
+                elif word.startswith('+'):
+                    keyword = word[1:]
+                    if keyword:
+                        tokens.append(keyword)
+                else:
+                    tokens.append(word)
+
+    return " ".join(tokens)
 
 
 class PaperRepository:
@@ -186,6 +227,13 @@ class PaperRepository:
                     INSERT INTO scores (run_id, paper_id, score, reasons_json)
                     VALUES (?, ?, ?, ?)
                 """, (run_id, paper_id, scored.score, reasons_json))
+
+                # 更新papers表的latest_score（取最高分）
+                cursor.execute("""
+                    UPDATE papers SET latest_score = MAX(
+                        COALESCE(latest_score, 0), ?
+                    ) WHERE id = ?
+                """, (scored.score, paper_id))
     
     def save_push(
         self,
@@ -273,70 +321,144 @@ class PaperRepository:
         page_size: int = 20,
         search: Optional[str] = None,
         source: Optional[str] = None,
-        min_score: Optional[float] = None
+        min_score: Optional[float] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        sort_by: str = "score",
+        sort_order: str = "desc"
     ) -> tuple[List[Dict[str, Any]], int]:
         """
-        获取论文列表（支持分页、搜索、筛选）
+        获取论文列表（支持FTS5全文检索、布尔搜索、多字段筛选、分页）
+
+        搜索语法:
+          - 普通关键词: "nitrogen fixation"
+          - 精确匹配: '"nitrogen fixation"'（双引号包裹短语）
+          - 布尔操作: "nitrogen AND enzyme NOT cancer"
+          - 加减号: "+nitrogen -cancer"
+          - 字段前缀: "source:biorxiv", "doi:10.1234"
+
         返回: (论文列表, 总数)
         """
         with get_db() as conn:
             cursor = conn.cursor()
-            
+
             # 构建查询条件
             conditions = []
             params = []
-            
+            use_fts = False
+            fts_query = ""
+
             if search:
-                conditions.append("(p.title LIKE ? OR p.abstract LIKE ?)")
-                search_pattern = f"%{search}%"
-                params.extend([search_pattern, search_pattern])
-            
+                # 提取字段前缀过滤（source:xxx, doi:xxx）
+                field_filters = re.findall(r'(source|doi|date):(\S+)', search, re.IGNORECASE)
+                # 移除字段前缀部分，剩余作为全文检索关键词
+                remaining_search = re.sub(r'(source|doi|date):\S+', '', search, flags=re.IGNORECASE).strip()
+
+                for field, value in field_filters:
+                    field_lower = field.lower()
+                    if field_lower == 'source':
+                        conditions.append("LOWER(p.source) LIKE ?")
+                        params.append(f"%{value.lower()}%")
+                    elif field_lower == 'doi':
+                        conditions.append("p.doi LIKE ?")
+                        params.append(f"%{value}%")
+                    elif field_lower == 'date':
+                        conditions.append("p.date LIKE ?")
+                        params.append(f"%{value}%")
+
+                # 全文检索
+                if remaining_search:
+                    fts_query = _parse_search_query(remaining_search)
+                    if fts_query:
+                        use_fts = True
+
             if source:
                 conditions.append("p.source = ?")
                 params.append(source)
-            
+
             if min_score is not None:
-                # 需要关联 scores 表来筛选分数
-                conditions.append("""
-                    p.id IN (
-                        SELECT paper_id FROM scores 
-                        WHERE score >= ?
-                    )
-                """)
+                conditions.append("p.latest_score >= ?")
                 params.append(min_score)
-            
-            where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
-            
-            # 获取总数
-            count_query = f"SELECT COUNT(DISTINCT p.id) FROM papers p {where_clause}"
-            cursor.execute(count_query, params)
-            total = cursor.fetchone()[0]
-            
-            # 获取分页数据（关联最新的评分）
-            offset = (page - 1) * page_size
-            query = f"""
-                SELECT DISTINCT
-                    p.id,
-                    p.item_id,
-                    p.title,
-                    p.abstract,
-                    p.date,
-                    p.source,
-                    p.doi,
-                    p.link,
-                    p.citation_count,
-                    p.influential_count,
-                    COALESCE(MAX(s.score), 0) as score
-                FROM papers p
-                LEFT JOIN scores s ON p.id = s.paper_id
-                {where_clause}
-                GROUP BY p.id
-                ORDER BY score DESC, p.created_at DESC
-                LIMIT ? OFFSET ?
-            """
-            params.extend([page_size, offset])
-            cursor.execute(query, params)
-            
+
+            if date_from:
+                conditions.append("p.date >= ?")
+                params.append(date_from)
+
+            if date_to:
+                conditions.append("p.date <= ?")
+                params.append(date_to)
+
+            # 验证排序字段
+            allowed_sort = {"score", "date", "citation_count", "created_at"}
+            if sort_by not in allowed_sort:
+                sort_by = "score"
+            sort_col = {
+                "score": "p.latest_score",
+                "date": "p.date",
+                "citation_count": "p.citation_count",
+                "created_at": "p.created_at"
+            }[sort_by]
+            order = "DESC" if sort_order.lower() == "desc" else "ASC"
+
+            if use_fts:
+                # FTS5全文检索路径 - 高性能
+                where_clause = "WHERE p.id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH ?)"
+                fts_params = [fts_query]
+                if conditions:
+                    where_clause += " AND " + " AND ".join(conditions)
+                    fts_params.extend(params)
+
+                # 获取总数
+                try:
+                    count_query = f"SELECT COUNT(*) FROM papers p {where_clause}"
+                    cursor.execute(count_query, fts_params)
+                    total = cursor.fetchone()[0]
+                except Exception as e:
+                    # FTS查询语法错误时回退到LIKE
+                    logger.warning(f"FTS5查询失败，回退到LIKE搜索: {e}")
+                    return self._get_papers_like_fallback(
+                        cursor, search, source, min_score, date_from, date_to,
+                        sort_col, order, page, page_size
+                    )
+
+                # 获取分页数据
+                offset = (page - 1) * page_size
+                query = f"""
+                    SELECT
+                        p.id, p.item_id, p.title, p.abstract, p.date,
+                        p.source, p.doi, p.link, p.citation_count,
+                        p.influential_count, COALESCE(p.latest_score, 0) as score
+                    FROM papers p
+                    {where_clause}
+                    ORDER BY {sort_col} {order}, p.created_at DESC
+                    LIMIT ? OFFSET ?
+                """
+                fts_params.extend([page_size, offset])
+                cursor.execute(query, fts_params)
+            else:
+                # 非全文检索路径 - 使用索引
+                where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+
+                # 获取总数
+                count_query = f"SELECT COUNT(*) FROM papers p {where_clause}"
+                cursor.execute(count_query, params)
+                total = cursor.fetchone()[0]
+
+                # 获取分页数据（使用papers表的latest_score，无需JOIN）
+                offset = (page - 1) * page_size
+                query = f"""
+                    SELECT
+                        p.id, p.item_id, p.title, p.abstract, p.date,
+                        p.source, p.doi, p.link, p.citation_count,
+                        p.influential_count, COALESCE(p.latest_score, 0) as score
+                    FROM papers p
+                    {where_clause}
+                    ORDER BY {sort_col} {order}, p.created_at DESC
+                    LIMIT ? OFFSET ?
+                """
+                params.extend([page_size, offset])
+                cursor.execute(query, params)
+
             rows = cursor.fetchall()
             papers = [
                 {
@@ -354,36 +476,91 @@ class PaperRepository:
                 }
                 for row in rows
             ]
-            
+
             return papers, total
+
+    def _get_papers_like_fallback(
+        self, cursor, search, source, min_score, date_from, date_to,
+        sort_col, order, page, page_size
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """FTS5查询失败时的LIKE回退方案"""
+        conditions = []
+        params = []
+
+        if search:
+            conditions.append("(p.title LIKE ? OR p.abstract LIKE ?)")
+            pattern = f"%{search}%"
+            params.extend([pattern, pattern])
+        if source:
+            conditions.append("p.source = ?")
+            params.append(source)
+        if min_score is not None:
+            conditions.append("p.latest_score >= ?")
+            params.append(min_score)
+        if date_from:
+            conditions.append("p.date >= ?")
+            params.append(date_from)
+        if date_to:
+            conditions.append("p.date <= ?")
+            params.append(date_to)
+
+        where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+
+        count_query = f"SELECT COUNT(*) FROM papers p {where_clause}"
+        cursor.execute(count_query, params)
+        total = cursor.fetchone()[0]
+
+        offset = (page - 1) * page_size
+        query = f"""
+            SELECT
+                p.id, p.item_id, p.title, p.abstract, p.date,
+                p.source, p.doi, p.link, p.citation_count,
+                p.influential_count, COALESCE(p.latest_score, 0) as score
+            FROM papers p
+            {where_clause}
+            ORDER BY {sort_col} {order}, p.created_at DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([page_size, offset])
+        cursor.execute(query, params)
+
+        rows = cursor.fetchall()
+        papers = [
+            {
+                'id': row[0],
+                'item_id': row[1],
+                'title': row[2],
+                'abstract': row[3] or '',
+                'date': row[4] or '',
+                'source': row[5] or '',
+                'doi': row[6] or '',
+                'link': row[7] or '',
+                'citation_count': row[8] or 0,
+                'influential_count': row[9] or 0,
+                'score': row[10] or 0.0
+            }
+            for row in rows
+        ]
+
+        return papers, total
     
     def get_paper_by_id(self, paper_id: int) -> Optional[Dict[str, Any]]:
-        """根据 ID 获取单篇论文"""
+        """根据 ID 获取单篇论文（无需JOIN，使用冗余分数字段）"""
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT 
-                    p.id,
-                    p.item_id,
-                    p.title,
-                    p.abstract,
-                    p.date,
-                    p.source,
-                    p.doi,
-                    p.link,
-                    p.citation_count,
-                    p.influential_count,
-                    COALESCE(MAX(s.score), 0) as score
+                SELECT
+                    p.id, p.item_id, p.title, p.abstract, p.date,
+                    p.source, p.doi, p.link, p.citation_count,
+                    p.influential_count, COALESCE(p.latest_score, 0) as score
                 FROM papers p
-                LEFT JOIN scores s ON p.id = s.paper_id
                 WHERE p.id = ?
-                GROUP BY p.id
             """, (paper_id,))
-            
+
             row = cursor.fetchone()
             if not row:
                 return None
-            
+
             return {
                 'id': row[0],
                 'item_id': row[1],

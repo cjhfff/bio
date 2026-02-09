@@ -18,17 +18,32 @@ async def get_papers(
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     source: Optional[str] = None,
-    min_score: Optional[float] = None
+    min_score: Optional[float] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    sort_by: str = Query("score", pattern="^(score|date|citation_count|created_at)$"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$")
 ):
     """
-    Get papers with pagination and filters
-    
+    Get papers with pagination, FTS5 full-text search, and filters.
+
+    Search syntax supports:
+      - Simple keywords: "nitrogen fixation"
+      - Exact phrase: '"nitrogen fixation"' (quoted)
+      - Boolean operators: "nitrogen AND enzyme NOT cancer"
+      - +/- prefix: "+nitrogen -cancer"
+      - Field prefix: "source:biorxiv", "doi:10.1234"
+
     Args:
         page: Page number (1-indexed)
-        page_size: Number of results per page
-        search: Search query for title/abstract
+        page_size: Number of results per page (1-100)
+        search: Full-text search query for title/abstract
         source: Filter by data source
         min_score: Minimum score filter
+        date_from: Filter papers from this date (YYYY-MM-DD)
+        date_to: Filter papers up to this date (YYYY-MM-DD)
+        sort_by: Sort field (score, date, citation_count, created_at)
+        sort_order: Sort direction (asc, desc)
     """
     try:
         repo = PaperRepository()
@@ -37,9 +52,13 @@ async def get_papers(
             page_size=page_size,
             search=search,
             source=source,
-            min_score=min_score
+            min_score=min_score,
+            date_from=date_from,
+            date_to=date_to,
+            sort_by=sort_by,
+            sort_order=sort_order
         )
-        
+
         return {
             "status": "success",
             "data": {
