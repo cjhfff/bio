@@ -189,7 +189,7 @@ class Config:
     
     # 抓取窗口配置（天数）
     DEFAULT_WINDOW_DAYS = int(os.getenv("DEFAULT_WINDOW_DAYS", "1"))  # 改为1天，只检索当天
-    EUROPEPMC_WINDOW_DAYS = int(os.getenv("EUROPEPMC_WINDOW_DAYS", "3"))  # 3天窗口，避免索引延迟导致漏掉论文
+    EUROPEPMC_WINDOW_DAYS = int(os.getenv("EUROPEPMC_WINDOW_DAYS", "1"))  # 1天窗口，只检索前一天
     
     # 快速AI预筛选配置
     QUICK_FILTER_THRESHOLD = int(os.getenv("QUICK_FILTER_THRESHOLD", "50"))  # 快速筛选阈值（只对≥此分数的论文进行AI判断）
