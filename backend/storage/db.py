@@ -70,7 +70,7 @@ def init_db():
         # 检查并添加title_fingerprint字段(如果不存在)
         try:
             cursor.execute("SELECT title_fingerprint FROM papers LIMIT 1")
-        except:
+        except sqlite3.OperationalError:
             logger.info("添加title_fingerprint字段到papers表")
             cursor.execute("ALTER TABLE papers ADD COLUMN title_fingerprint TEXT")
         

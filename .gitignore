@@ -1,5 +1,6 @@
 # Logs
 logs/
+*.log
 
 # Python
 __pycache__/
@@ -13,16 +14,24 @@ __pycache__/
 dist/
 build/
 *.egg
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
 # Database
 *.db
 *.sqlite
+*.db-journal
 
 # Environment
 .env
+.env.local
+.env.*.local
 .venv
 venv/
 env/
+ENV/
 
 # IDEs
 .vscode/
@@ -30,13 +39,17 @@ env/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
 
 # OS
 .DS_Store
 Thumbs.db
+*.bak
 
 # Data directory
 data/
+!data/.gitkeep
 
 # Frontend
 frontend/node_modules/
@@ -44,6 +57,8 @@ frontend/dist/
 frontend/.nuxt/
 frontend/.output/
 frontend/.cache/
+frontend/package-lock.json
+frontend/yarn.lock
 
 # Reports (keep structure, ignore content)
 reports/*.txt
@@ -53,8 +68,16 @@ reports/*.html
 # Temporary files
 tmp/
 *.tmp
+temp/
 
 # Cache
 .cache/
 *.cache
+
+# Docker
+*.tar
+docker-compose.override.yml
+
+# Backup files
+*.backup
 

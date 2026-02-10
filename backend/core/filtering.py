@@ -141,8 +141,8 @@ def is_recent_date(date_str: str, days: int = 7, is_top_tier: bool = False) -> b
         if 'GMT' in date_str or 'UTC' in date_str or (',' in date_str and len(date_str) > 10):
             try:
                 paper_date = parsedate_to_datetime(date_str).date()
-            except:
-                pass
+            except (ValueError, TypeError) as e:
+                logger.debug(f"RSS 日期解析失败: {date_str} - {e}")
         
         # 如果 RSS 格式解析失败，尝试标准格式
         if paper_date is None:
@@ -152,8 +152,8 @@ def is_recent_date(date_str: str, days: int = 7, is_top_tier: bool = False) -> b
                     paper_date = datetime.datetime.strptime(date_part, '%Y-%m-%d').date()
                 elif '/' in date_part:
                     paper_date = datetime.datetime.strptime(date_part, '%Y/%m/%d').date()
-            except:
-                pass
+            except (ValueError, TypeError) as e:
+                logger.debug(f"标准日期解析失败: {date_part} - {e}")
         
         # 如果解析失败，检查是否为顶刊并启用容错
         if paper_date is None:

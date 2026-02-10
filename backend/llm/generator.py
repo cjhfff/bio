@@ -18,11 +18,13 @@ try:
     # DeepSeek使用类似GPT的tokenizer，使用cl100k_base编码
     try:
         _tokenizer = tiktoken.get_encoding("cl100k_base")
-    except:
+    except Exception as e:
+        logger.debug(f"cl100k_base编码不可用: {e}")
         # 如果cl100k_base不可用，尝试其他编码
         try:
             _tokenizer = tiktoken.get_encoding("gpt2")
-        except:
+        except Exception as e:
+            logger.debug(f"gpt2编码不可用: {e}")
             _tokenizer = None
             HAS_TIKTOKEN = False
 except ImportError:

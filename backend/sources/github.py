@@ -179,8 +179,8 @@ class GitHubSource(BaseSource):
             try:
                 dt = datetime.datetime.fromisoformat(updated_date.replace('Z', '+00:00'))
                 return dt.strftime('%Y-%m-%d')
-            except:
-                pass
+            except (ValueError, TypeError) as e:
+                logger.debug(f"GitHub 日期解析失败: {updated_date} - {e}")
         # 如果没有更新日期，使用前一天作为默认值（因为只检索前一天的论文）
         yesterday = (datetime.date.today() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
         return yesterday
