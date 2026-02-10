@@ -49,13 +49,13 @@ class EuropePMCSource(BaseSource):
             all_data = []
             page_size = 50
             page_num = 1
+            
+            # 输出查询信息（INFO级别，方便排查）
+            logger.info(f"EuropePMC 查询日期范围: {start_date} 到 {yesterday}")
+            logger.info(f"EuropePMC 查询URL: {first_url[:200]}...")  # 截取前200字符避免过长
+            
             while len(all_data) < total_hits:
                 url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={query}&format=json&pageSize={page_size}&page={page_num}"
-                
-                # 添加调试日志
-                if page_num == 1:
-                    logger.debug(f"EuropePMC 查询URL: {url}")
-                    logger.debug(f"EuropePMC 查询条件: {query}")
                 
                 # 明确禁用代理
                 response = requests.get(url, timeout=30, proxies={'http': None, 'https': None})
