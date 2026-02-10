@@ -29,8 +29,284 @@ from backend.push import PushPlusSender, EmailSender, WeComSender
 logger = get_logger(__name__)
 
 
+def fetch_papers(sources: List, sent_ids: Set[str], exclude_keywords: List[str]) -> List:
+    """
+    第一步：并发抓取论文数据
+    
+    Args:
+        sources: 数据源列表
+        sent_ids: 已处理论文ID集合
+        exclude_keywords: 排除关键词列表
+        
+    Returns:
+        source_results: 各数据源的抓取结果
+    """
+    logger.info("\n开始并发抓取数据...")
+    source_results = []
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(sources)) as executor:
+        future_to_source = {
+            executor.submit(source.fetch, sent_ids, exclude_keywords): source
+            for source in sources
+        }
+        
+        for future in concurrent.futures.as_completed(future_to_source):
+            source = future_to_source[future]
+            try:
+                result = future.result()
+                source_results.append(result)
+                logger.info(f"{source.name}: 获取到 {len(result.papers)} 条结果")
+            except Exception as e:
+                logger.error(f"{source.name} 搜索失败: {e}")
+                source_results.append(
+                    type('SourceResult', (), {'source_name': source.name, 'papers': [], 'error': str(e)})()
+                )
+    
+    return source_results
+
+
+def score_and_filter(source_results: List) -> List:
+    """
+    第二步：评分和快速AI筛选
+    
+    Args:
+        source_results: 各数据源的抓取结果
+        
+    Returns:
+        filtered_papers: 筛选后的评分论文列表
+    """
+    # 合并与筛选
+    logger.info("\n开始合并与筛选...")
+    
+    # 获取所有论文
+    all_papers = []
+    for result in source_results:
+        if result.success():
+            all_papers.extend(result.papers)
+    
+    # 对当天所有论文进行评分
+    logger.info(f"\n对当天所有论文进行评分（共{len(all_papers)}篇）...")
+    from backend.core.scoring import score_paper
+    all_scored_papers = [score_paper(p) for p in all_papers]
+    
+    # 按评分排序
+    all_scored_papers.sort(key=lambda x: x.score, reverse=True)
+    
+    if not all_scored_papers:
+        logger.info("当天没有新论文需要推送")
+        return []
+    
+    # 快速AI预筛选：对高分论文进行快速判断
+    logger.info(f"\n开始快速AI预筛选（对高分论文进行相关性判断）...")
+    from backend.llm.quick_check import quick_relevance_check
+    
+    RELEVANCE_CHECK_THRESHOLD = Config.QUICK_FILTER_THRESHOLD
+    # 动态调整阈值：论文数量少时降低阈值
+    if len(all_scored_papers) <= 5:
+        RELEVANCE_CHECK_THRESHOLD = max(RELEVANCE_CHECK_THRESHOLD - 15, 20)
+        logger.info(f"论文数量较少（{len(all_scored_papers)}篇），动态降低筛选阈值至 {RELEVANCE_CHECK_THRESHOLD}分")
+    elif len(all_scored_papers) <= 10:
+        RELEVANCE_CHECK_THRESHOLD = max(RELEVANCE_CHECK_THRESHOLD - 10, 30)
+        logger.info(f"论文数量较少（{len(all_scored_papers)}篇），动态降低筛选阈值至 {RELEVANCE_CHECK_THRESHOLD}分")
+    
+    logger.info(f"快速筛选阈值: {RELEVANCE_CHECK_THRESHOLD}分（只对≥{RELEVANCE_CHECK_THRESHOLD}分的论文进行AI判断）")
+    filtered_papers = []
+    filtered_count = 0
+    checked_count = 0
+    
+    for scored_paper in all_scored_papers:
+        if scored_paper.score >= RELEVANCE_CHECK_THRESHOLD:
+            checked_count += 1
+            # 对高分论文进行快速AI判断
+            is_relevant = quick_relevance_check(scored_paper.paper)
+            
+            if is_relevant is False:
+                # 不相关，直接过滤
+                logger.info(f"⏭️ [快速筛选] 论文 '{scored_paper.paper.title[:60]}...' (评分: {scored_paper.score:.1f}) 被判断为不相关，已直接过滤")
+                filtered_count += 1
+                continue
+            elif is_relevant is None:
+                # 判断失败，保留论文（保守策略）
+                logger.warning(f"⚠️ [快速筛选] 论文 '{scored_paper.paper.title[:60]}...' AI判断失败，保留论文（保守策略）")
+                filtered_papers.append(scored_paper)
+            else:
+                # 相关，保留
+                filtered_papers.append(scored_paper)
+        else:
+            # 低分论文，直接保留（不进行快速检查，节省API调用）
+            filtered_papers.append(scored_paper)
+    
+    # 重新排序
+    filtered_papers.sort(key=lambda x: x.score, reverse=True)
+    
+    if checked_count > 0:
+        logger.info(f"✅ [快速筛选] 完成：检查了 {checked_count} 篇高分论文，过滤了 {filtered_count} 篇不相关论文，保留了 {len(filtered_papers)} 篇论文")
+    
+    return filtered_papers
+
+
+def generate_reports(scored_papers: List) -> tuple:
+    """
+    第三步：逐篇生成AI报告
+    
+    Args:
+        scored_papers: 评分后的论文列表
+        
+    Returns:
+        (all_paper_reports, processed_papers): 所有报告和成功处理的论文
+    """
+    logger.info(f"\n开始单篇处理模式：共 {len(scored_papers)} 篇论文，逐篇处理")
+    
+    all_paper_reports = []
+    processed_papers = []  # 记录成功处理的论文
+    
+    for paper_idx, scored_paper in enumerate(scored_papers, 1):
+        logger.info(f"\n{'='*80}")
+        logger.info(f"处理论文 {paper_idx}/{len(scored_papers)}")
+        logger.info(f"标题: {scored_paper.paper.title[:80]}...")
+        logger.info(f"评分: {scored_paper.score:.1f}分")
+        logger.info(f"{'='*80}\n")
+        
+        try:
+            # 生成单篇论文报告
+            from backend.llm.generator import generate_single_paper_report
+            paper_report = generate_single_paper_report(scored_paper, paper_idx)
+            
+            # 检查是否是降级报告
+            is_fallback = paper_report and paper_report.startswith("## ⚠️ 报告生成说明")
+            # 检查是否是不相关论文
+            is_irrelevant = paper_report and paper_report.startswith("## 不相关论文")
+            
+            if is_irrelevant:
+                # 不相关论文，添加到报告中但单独标记
+                all_paper_reports.append(paper_report)
+                logger.info(f"⏭️ 论文 {paper_idx} 不属于三大研究方向，已添加到报告但标记为不相关")
+            elif paper_report and not is_fallback:
+                # 成功生成AI报告
+                all_paper_reports.append(paper_report)
+                processed_papers.append(scored_paper)
+                logger.info(f"✅ 论文 {paper_idx} 处理成功（AI分析完成）")
+            else:
+                # 降级报告（API调用失败）
+                all_paper_reports.append(paper_report)
+                logger.warning(f"⚠️ 论文 {paper_idx} 使用降级报告（API调用失败），论文将不会标记为已推送")
+            
+        except Exception as e:
+            logger.error(f"❌ 论文 {paper_idx} 处理失败: {e}", exc_info=True)
+            # 即使失败，也生成一个简单的降级报告
+            from backend.llm.generator import _generate_fallback_report
+            fallback_report = _generate_fallback_report([scored_paper], e)
+            all_paper_reports.append(fallback_report)
+            logger.warning(f"论文 {paper_idx} 将不会标记为已推送，下次运行时会重新处理")
+    
+    return all_paper_reports, processed_papers
+
+
+def build_daily_report(all_paper_reports: List) -> tuple:
+    """
+    第四步：组装最终报告
+    
+    Args:
+        all_paper_reports: 所有单篇报告
+        
+    Returns:
+        (daily_report, relevant_count, irrelevant_count): 最终报告和统计信息
+    """
+    logger.info(f"\n{'='*80}")
+    logger.info("所有论文处理完成，开始生成最终报告...")
+    logger.info(f"{'='*80}\n")
+    
+    # 分离相关论文和不相关论文
+    relevant_reports = []
+    irrelevant_reports = []
+    
+    for report in all_paper_reports:
+        if report.startswith("## 不相关论文"):
+            irrelevant_reports.append(report)
+        else:
+            relevant_reports.append(report)
+    
+    # 构建报告
+    if relevant_reports or irrelevant_reports:
+        daily_report = "## 📊 今日研究总结\n\n"
+        
+        # 相关论文部分
+        if relevant_reports:
+            daily_report += f"### ✅ 相关论文（共 {len(relevant_reports)} 篇）\n\n"
+            # 规范化报告格式
+            normalized_reports = []
+            for report in relevant_reports:
+                normalized_report = report.replace("## 【论文标题】", "### 【论文标题】")
+                normalized_reports.append(normalized_report)
+            daily_report += "\n\n".join([f"## 论文 {i} 重要研究成果\n\n{report}" 
+                                        for i, report in enumerate(normalized_reports, 1)])
+        
+        # 不相关论文部分
+        if irrelevant_reports:
+            if relevant_reports:
+                daily_report += "\n\n---\n\n"
+            daily_report += f"### ⏭️ 已过滤论文（共 {len(irrelevant_reports)} 篇，不属于三大研究方向）\n\n"
+            normalized_irrelevant = []
+            for report in irrelevant_reports:
+                normalized = report.replace("## 不相关论文", "### 不相关论文")
+                normalized = normalized.replace("## 【论文标题】", "### 【论文标题】")
+                normalized_irrelevant.append(normalized)
+            daily_report += "\n\n".join([f"## 已过滤论文 {i}\n\n{report}"
+                                        for i, report in enumerate(normalized_irrelevant, 1)])
+    else:
+        daily_report = "## 📊 今日研究总结\n\n本次检索范围内未发现相关论文。"
+    
+    return daily_report, len(relevant_reports), len(irrelevant_reports)
+
+
+def save_and_push(daily_report: str, papers_count: int, source_results: List, 
+                  run_id: str, relevant_count: int, irrelevant_count: int,
+                  processed_papers: List) -> bool:
+    """
+    第五步：保存文件并推送
+    
+    Args:
+        daily_report: 最终报告内容
+        papers_count: 论文总数
+        source_results: 数据源结果
+        run_id: 运行ID
+        relevant_count: 相关论文数
+        irrelevant_count: 不相关论文数
+        processed_papers: 成功处理的论文列表
+        
+    Returns:
+        push_success: 推送是否成功
+    """
+    # 保存报告到文件
+    save_report_to_file(daily_report, papers_count, source_results, run_id,
+                        relevant_count=relevant_count, irrelevant_count=irrelevant_count)
+    
+    # 推送最终报告
+    logger.info("\n开始推送最终报告...")
+    push_success = False
+    
+    # PushPlus
+    pushplus_sender = PushPlusSender()
+    if pushplus_sender.send("生物化学研究精选论文", daily_report):
+        push_success = True
+    
+    # 邮件
+    email_sender = EmailSender()
+    if email_sender.send("生物化学研究精选论文", daily_report):
+        push_success = True
+    
+    # 企业微信
+    wecom_sender = WeComSender()
+    if wecom_sender.send("生物化学研究精选论文", daily_report):
+        push_success = True
+    
+    logger.info(f"\n推送完成：处理 {len(processed_papers)} 篇论文（未标记已推送，下次运行将重新处理）")
+    
+    return push_success
+
+
 def run_push_task(window_days: int = None, top_k: int = None):
-    """执行推送任务"""
+    """执行推送任务（主流程编排）"""
     window_days = window_days or Config.DEFAULT_WINDOW_DAYS
     top_k = top_k or Config.TOP_K
     
@@ -38,260 +314,69 @@ def run_push_task(window_days: int = None, top_k: int = None):
     init_db()
     repo = PaperRepository()
     
-    # 创建运行记录（在配置日志之前，以便日志文件名包含 run_id）
+    # 创建运行记录
     run_id = repo.create_run(window_days)
     
-    # 重新配置日志，使用 run_id 生成独立的日志文件
+    # 重新配置日志
     setup_logging(run_id=run_id)
     logger = get_logger(__name__)
     
     logger.info("=" * 80)
     logger.info("开始执行生物化学研究资讯抓取与推送")
-    logger.info(f"抓取窗口：{window_days}天（EuropePMC {Config.EUROPEPMC_WINDOW_DAYS}天），其余数据源均为近{window_days}天")
+    logger.info(f"抓取窗口：{window_days}天（EuropePMC {Config.EUROPEPMC_WINDOW_DAYS}天）")
     logger.info("=" * 80)
     logger.info(f"运行ID: {run_id}")
     
     try:
-        # 获取已处理的论文ID（去重用），避免多次点击导致重复计数
+        # 获取已处理的论文ID
         logger.info("正在获取已处理论文ID以进行去重...")
         sent_ids = repo.get_sent_ids()
         logger.info(f"已处理 {len(sent_ids)} 篇论文")
         
         # 定义数据源
-        # 注：暂时禁用 Semantic Scholar（API限流严重）和 ScienceNews（RSS源失效）
         sources = [
             BioRxivSource(window_days),
             PubMedSource(window_days),
             RSSSource(window_days),
             EuropePMCSource(Config.EUROPEPMC_WINDOW_DAYS),
-            # ScienceNewsSource(window_days),  # 暂时禁用：RSS源返回404
             GitHubSource(window_days),
-            # SemanticScholarSource(window_days),  # 暂时禁用：API限流严重，导致超时
         ]
         
-        # 并发抓取（传入已存在的ID进行去重，避免重复计数）
-        logger.info("\n开始并发抓取数据...")
-        source_results = []
+        # 第一步：抓取论文
+        source_results = fetch_papers(sources, sent_ids, Config.EXCLUDE_KEYWORDS)
         
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(sources)) as executor:
-            future_to_source = {
-                # 传入 repo.get_sent_ids() 获取的集合
-                executor.submit(source.fetch, sent_ids, Config.EXCLUDE_KEYWORDS): source
-                for source in sources
-            }
-            
-            for future in concurrent.futures.as_completed(future_to_source):
-                source = future_to_source[future]
-                try:
-                    result = future.result()
-                    source_results.append(result)
-                    logger.info(f"{source.name}: 获取到 {len(result.papers)} 条结果")
-                except Exception as e:
-                    logger.error(f"{source.name} 搜索失败: {e}")
-                    source_results.append(
-                        type('SourceResult', (), {'source_name': source.name, 'papers': [], 'error': str(e)})()
-                    )
+        # 第二步：评分和筛选
+        filtered_papers = score_and_filter(source_results)
         
-        # 合并与筛选
-        logger.info("\n开始合并与筛选...")
-        
-        # 获取所有论文（用于评分，不进行去重）
-        all_papers = []
-        for result in source_results:
-            if result.success():
-                all_papers.extend(result.papers)
-        
-        # 对当天所有论文进行评分
-        logger.info(f"\n对当天所有论文进行评分（共{len(all_papers)}篇）...")
-        from backend.core.scoring import score_paper
-        all_scored_papers = [score_paper(p) for p in all_papers]
-        
-        # 按评分排序
-        all_scored_papers.sort(key=lambda x: x.score, reverse=True)
-        
-        if not all_scored_papers:
+        if not filtered_papers:
             logger.info("当天没有新论文需要推送")
             repo.update_run(run_id, status='completed')
             return
         
-        # 快速AI预筛选：对高分论文进行快速判断
-        logger.info(f"\n开始快速AI预筛选（对高分论文进行相关性判断）...")
-        from backend.llm.quick_check import quick_relevance_check
-        from backend.models import ScoreReason
-        
-        RELEVANCE_CHECK_THRESHOLD = Config.QUICK_FILTER_THRESHOLD  # 从配置读取阈值
-        # 动态调整阈值：论文数量少时降低阈值，避免漏掉相关论文
-        if len(all_scored_papers) <= 5:
-            RELEVANCE_CHECK_THRESHOLD = max(RELEVANCE_CHECK_THRESHOLD - 15, 20)
-            logger.info(f"论文数量较少（{len(all_scored_papers)}篇），动态降低筛选阈值至 {RELEVANCE_CHECK_THRESHOLD}分")
-        elif len(all_scored_papers) <= 10:
-            RELEVANCE_CHECK_THRESHOLD = max(RELEVANCE_CHECK_THRESHOLD - 10, 30)
-            logger.info(f"论文数量较少（{len(all_scored_papers)}篇），动态降低筛选阈值至 {RELEVANCE_CHECK_THRESHOLD}分")
-        logger.info(f"快速筛选阈值: {RELEVANCE_CHECK_THRESHOLD}分（只对≥{RELEVANCE_CHECK_THRESHOLD}分的论文进行AI判断）")
-        filtered_papers = []
-        filtered_count = 0
-        checked_count = 0
-        
-        for scored_paper in all_scored_papers:
-            if scored_paper.score >= RELEVANCE_CHECK_THRESHOLD:
-                checked_count += 1
-                # 对高分论文进行快速AI判断
-                is_relevant = quick_relevance_check(scored_paper.paper)
-                
-                if is_relevant is False:
-                    # 不相关，直接过滤（不添加到列表中）
-                    logger.info(f"⏭️ [快速筛选] 论文 '{scored_paper.paper.title[:60]}...' (评分: {scored_paper.score:.1f}) 被判断为不相关，已直接过滤")
-                    filtered_count += 1
-                    continue  # 跳过，不添加到filtered_papers
-                elif is_relevant is None:
-                    # 判断失败，保留论文（保守策略，避免误过滤）
-                    logger.warning(f"⚠️ [快速筛选] 论文 '{scored_paper.paper.title[:60]}...' AI判断失败，保留论文（保守策略）")
-                    filtered_papers.append(scored_paper)
-                else:
-                    # 相关，保留
-                    filtered_papers.append(scored_paper)
-            else:
-                # 低分论文，直接保留（不进行快速检查，节省API调用）
-                filtered_papers.append(scored_paper)
-        
-        # 重新排序
-        filtered_papers.sort(key=lambda x: x.score, reverse=True)
-        all_scored_papers = filtered_papers
-        
-        if checked_count > 0:
-            logger.info(f"✅ [快速筛选] 完成：检查了 {checked_count} 篇高分论文，过滤了 {filtered_count} 篇不相关论文，保留了 {len(all_scored_papers)} 篇论文")
-        
         # 保存所有论文的评分
-        logger.info(f"保存所有论文的评分（共{len(all_scored_papers)}篇）...")
-        repo.save_scores(run_id, all_scored_papers)
+        logger.info(f"保存所有论文的评分（共{len(filtered_papers)}篇）...")
+        repo.save_scores(run_id, filtered_papers)
         
         # 更新运行记录
         repo.update_run(
             run_id,
             total_papers=sum(len(r.papers) for r in source_results),
-            unseen_papers=len(all_papers),
-            top_k=len(all_scored_papers),  # 所有论文都处理
+            unseen_papers=sum(len(r.papers) for r in source_results if r.success()),
+            top_k=len(filtered_papers),
             status='running'
         )
         
-        # 单篇处理模式：一篇一篇处理
-        logger.info(f"\n开始单篇处理模式：共 {len(all_scored_papers)} 篇论文，逐篇处理")
+        # 第三步：生成报告
+        all_paper_reports, processed_papers = generate_reports(filtered_papers)
         
-        all_paper_reports = []
-        processed_papers = []  # 记录成功处理的论文
+        # 第四步：组装最终报告
+        daily_report, relevant_count, irrelevant_count = build_daily_report(all_paper_reports)
         
-        for paper_idx, scored_paper in enumerate(all_scored_papers, 1):
-            logger.info(f"\n{'='*80}")
-            logger.info(f"处理论文 {paper_idx}/{len(all_scored_papers)}")
-            logger.info(f"标题: {scored_paper.paper.title[:80]}...")
-            logger.info(f"评分: {scored_paper.score:.1f}分")
-            logger.info(f"{'='*80}\n")
-            
-            try:
-                # 生成单篇论文报告（包含错误处理和重试机制）
-                from backend.llm.generator import generate_single_paper_report
-                paper_report = generate_single_paper_report(scored_paper, paper_idx)
-                
-                # 检查是否是降级报告
-                is_fallback = paper_report and paper_report.startswith("## ⚠️ 报告生成说明")
-                # 检查是否是不相关论文
-                is_irrelevant = paper_report and paper_report.startswith("## 不相关论文")
-                
-                if is_irrelevant:
-                    # 不相关论文，添加到报告中但单独标记（不标记为已推送）
-                    all_paper_reports.append(paper_report)
-                    logger.info(f"⏭️ 论文 {paper_idx} 不属于三大研究方向，已添加到报告但标记为不相关")
-                elif paper_report and not is_fallback:
-                    # 成功生成AI报告
-                    all_paper_reports.append(paper_report)
-                    # 记录成功处理的论文
-                    processed_papers.append(scored_paper)
-                    logger.info(f"✅ 论文 {paper_idx} 处理成功（AI分析完成）")
-                else:
-                    # 降级报告（API调用失败），仍然添加到报告中，但不标记为已推送
-                    all_paper_reports.append(paper_report)
-                    logger.warning(f"⚠️ 论文 {paper_idx} 使用降级报告（API调用失败），论文将不会标记为已推送，下次运行时会重新处理")
-                
-            except Exception as e:
-                logger.error(f"❌ 论文 {paper_idx} 处理失败: {e}", exc_info=True)
-                # 即使失败，也生成一个简单的降级报告
-                from backend.llm.generator import _generate_fallback_report
-                fallback_report = _generate_fallback_report([scored_paper], e)
-                all_paper_reports.append(fallback_report)
-                # 失败的论文不标记为已推送，下次会重新处理
-                logger.warning(f"论文 {paper_idx} 将不会标记为已推送，下次运行时会重新处理")
-        
-        # 直接合并所有单篇报告（不生成最终总结）
-        logger.info(f"\n{'='*80}")
-        logger.info("所有论文处理完成，开始生成最终报告...")
-        logger.info(f"{'='*80}\n")
-        
-        # 分离相关论文和不相关论文
-        relevant_reports = []
-        irrelevant_reports = []
-        
-        for report in all_paper_reports:
-            if report.startswith("## 不相关论文"):
-                irrelevant_reports.append(report)
-            else:
-                relevant_reports.append(report)
-        
-        # 构建报告
-        if relevant_reports or irrelevant_reports:
-            daily_report = "## 📊 今日研究总结\n\n"
-            
-            # 相关论文部分
-            if relevant_reports:
-                daily_report += f"### ✅ 相关论文（共 {len(relevant_reports)} 篇）\n\n"
-                # 规范化报告格式：修复标题格式不一致问题（## 改为 ###）
-                normalized_reports = []
-                for report in relevant_reports:
-                    # 修复标题格式：将 "## 【论文标题】" 改为 "### 【论文标题】"
-                    normalized_report = report.replace("## 【论文标题】", "### 【论文标题】")
-                    normalized_reports.append(normalized_report)
-                daily_report += "\n\n".join([f"## 论文 {i} 重要研究成果\n\n{report}" 
-                                            for i, report in enumerate(normalized_reports, 1)])
-            
-            # 不相关论文部分
-            if irrelevant_reports:
-                if relevant_reports:
-                    daily_report += "\n\n---\n\n"
-                daily_report += f"### ⏭️ 已过滤论文（共 {len(irrelevant_reports)} 篇，不属于三大研究方向）\n\n"
-                # 规范化不相关论文格式：将 "## 不相关论文" 改为 "### 不相关论文"
-                normalized_irrelevant = []
-                for report in irrelevant_reports:
-                    normalized = report.replace("## 不相关论文", "### 不相关论文")
-                    normalized = normalized.replace("## 【论文标题】", "### 【论文标题】")
-                    normalized_irrelevant.append(normalized)
-                daily_report += "\n\n".join([f"## 已过滤论文 {i}\n\n{report}"
-                                            for i, report in enumerate(normalized_irrelevant, 1)])
-        else:
-            daily_report = "## 📊 今日研究总结\n\n本次检索范围内未发现相关论文。"
-        
-        # 保存报告到文件（传入分类统计信息）
-        save_report_to_file(daily_report, len(all_scored_papers), source_results, run_id,
-                            relevant_count=len(relevant_reports), irrelevant_count=len(irrelevant_reports))
-        
-        # 推送最终报告（不标记已推送，每次运行内容一致）
-        logger.info("\n开始推送最终报告...")
-        push_success = False
-        
-        # PushPlus
-        pushplus_sender = PushPlusSender()
-        if pushplus_sender.send("生物化学研究精选论文", daily_report):
-            push_success = True
-        
-        # 邮件
-        email_sender = EmailSender()
-        if email_sender.send("生物化学研究精选论文", daily_report):
-            push_success = True
-        
-        # 企业微信
-        wecom_sender = WeComSender()
-        if wecom_sender.send("生物化学研究精选论文", daily_report):
-            push_success = True
-        
-        logger.info(f"\n推送完成：处理 {len(processed_papers)} 篇论文，共 {len(all_paper_reports)} 篇论文报告（未标记已推送，下次运行将重新处理）")
+        # 第五步：保存和推送
+        push_success = save_and_push(
+            daily_report, len(filtered_papers), source_results, run_id,
+            relevant_count, irrelevant_count, processed_papers
+        )
         
         # 更新运行记录
         repo.update_run(run_id, status='completed' if push_success else 'failed')
