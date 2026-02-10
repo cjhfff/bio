@@ -431,13 +431,8 @@ def main():
     # 设置日志
     setup_logging()
     
-    # 验证配置
-    errors = Config.validate()
-    if errors:
-        logger.error("配置错误:")
-        for error in errors:
-            logger.error(f"  - {error}")
-        return
+    # 验证配置（如果配置错误则退出）
+    Config.validate_and_exit()
     
     # 代理已在文件开头清除
     

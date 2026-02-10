@@ -25,7 +25,7 @@ class Config:
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")  # 简单默认密码，建议修改
     
     # DeepSeek API
-    DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-cab7a36ab0d14c9eb05267835dd886eb")
+    DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
     DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
     
     # 备用 DeepSeek API 密钥（在主密钥失败时自动切换）
@@ -38,12 +38,6 @@ class Config:
             key = os.getenv(f"DEEPSEEK_API_KEY_{i}", "")
             if key:
                 backup_keys.append(key)
-        # 硬编码的备用密钥（如果环境变量未设置）
-        if not backup_keys:
-            backup_keys = [
-                "sk-eba751bb475c41e7b06a994b14d33bbc",
-                "sk-ef50473778834ee9930d9b9cf0aa708a"
-            ]
         return backup_keys
     
     @classmethod
@@ -54,7 +48,7 @@ class Config:
         return keys
     
     # PubMed
-    PUBMED_EMAIL = os.getenv("PUBMED_EMAIL", "1606953651@qq.com")
+    PUBMED_EMAIL = os.getenv("PUBMED_EMAIL", "")
     
     # 研究方向配置（三大方向）
     RESEARCH_TOPICS: Dict[str, List[str]] = {
@@ -172,12 +166,12 @@ class Config:
     # 邮件配置
     SENDER_EMAIL = os.getenv("SENDER_EMAIL", "")
     SENDER_AUTH_CODE = os.getenv("SENDER_AUTH_CODE", "")
-    RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL", "1606953651@qq.com")
+    RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL", "")
     
-    # PushPlus 配置（支持多个token，用逗号分隔）,3dcf2b0769b14f99b94d5e0c611fdda9
+    # PushPlus 配置（支持多个token，用逗号分隔）
     PUSHPLUS_TOKENS: List[str] = [
         token.strip() 
-        for token in os.getenv("PUSHPLUS_TOKENS", "81b0e465ca8445b38117e84c90cd84aa,353188ca63a443269aea986befa6ea48").split(",")
+        for token in os.getenv("PUSHPLUS_TOKENS", "").split(",")
         if token.strip()
     ]
     
@@ -292,11 +286,38 @@ class Config:
     def validate(cls) -> List[str]:
         """验证配置，返回错误列表"""
         errors = []
+        
+        # 检查必需的DeepSeek API密钥
         if not cls.DEEPSEEK_API_KEY:
-            errors.append("DEEPSEEK_API_KEY 未设置")
+            errors.append("❌ DEEPSEEK_API_KEY 未设置，请在 .env 文件中配置")
+        
+        # 检查必需的PubMed邮箱
         if not cls.PUBMED_EMAIL:
-            errors.append("PUBMED_EMAIL 未设置")
+            errors.append("❌ PUBMED_EMAIL 未设置，请在 .env 文件中配置 PubMed API 需要的邮箱地址")
+        
+        # 警告：如果没有配置任何推送渠道
+        if not cls.PUSHPLUS_TOKENS and not cls.SENDER_EMAIL and not cls.WECOM_WEBHOOK_URL:
+            errors.append("⚠️  警告：未配置任何推送渠道（PUSHPLUS_TOKENS、SENDER_EMAIL 或 WECOM_WEBHOOK_URL），报告将不会被推送")
+        
         return errors
+    
+    @classmethod
+    def validate_and_exit(cls):
+        """验证配置，如果有错误则打印提示并退出程序"""
+        errors = cls.validate()
+        if errors:
+            print("\n" + "="*60)
+            print("❌ 配置验证失败，请检查以下问题：")
+            print("="*60)
+            for error in errors:
+                print(f"  {error}")
+            print("\n💡 提示：")
+            print("  1. 复制 .env.example 到 .env")
+            print("  2. 在 .env 文件中填写必需的配置项")
+            print("  3. 重新运行程序")
+            print("="*60 + "\n")
+            import sys
+            sys.exit(1)
 
 
 
