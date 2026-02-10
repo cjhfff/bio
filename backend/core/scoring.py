@@ -30,7 +30,15 @@ def score_paper(paper: Paper) -> ScoredPaper:
         # 扩展：更多非相关领域
         "diabetes", "metabolic disease", "cardiovascular", "neurological",
         "immunotherapy", "chemotherapy", "surgery", "diagnosis",
-        "prognosis", "epidemiology", "public health", "healthcare"
+        "prognosis", "epidemiology", "public health", "healthcare",
+        # 动物模型/人类医学
+        "mouse model", "animal model", "clinical trial", "human cell",
+        "human disease", "human health", "aging", "ageing",
+        # 食品/农业应用（非基础研究）
+        "food processing", "food safety", "fermentation industry",
+        # 纯计算/AI方法（非实验生物学）
+        "machine learning", "deep learning", "artificial intelligence",
+        "language model", "neural network"
     ]
     has_non_relevant_context = any(ctx in text for ctx in non_relevant_contexts)
     
@@ -45,7 +53,17 @@ def score_paper(paper: Paper) -> ScoredPaper:
         "substrate binding", "enzyme-substrate", "catalytic domain",
         "root nodule", "symbiosis", "rhizobium", "legume",
         "receptor activation", "ligand binding", "signal pathway",
-        "two-component", "histidine kinase", "response regulator"
+        "two-component", "histidine kinase", "response regulator",
+        # 植物免疫/PTI相关
+        "plant immunity", "plant defense", "plant immune", "pti",
+        "pattern-triggered", "pattern triggered", "prr",
+        "fls2", "efr", "bak1", "bik1", "resistosome",
+        # 结构生物学方法
+        "cryo-em", "x-ray", "crystal structure", "structural determination",
+        "electron microscopy", "atomic model", "molecular dynamics",
+        # 固氮扩展
+        "nif gene", "nif cluster", "diazotroph", "bradyrhizobium",
+        "biological nitrogen", "nitrogen cycling"
     ]
     has_relevant_context = any(ctx in text for ctx in relevant_contexts)
     

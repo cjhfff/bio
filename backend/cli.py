@@ -120,6 +120,13 @@ def run_push_task(window_days: int = None, top_k: int = None):
         from backend.models import ScoreReason
         
         RELEVANCE_CHECK_THRESHOLD = Config.QUICK_FILTER_THRESHOLD  # 从配置读取阈值
+        # 动态调整阈值：论文数量少时降低阈值，避免漏掉相关论文
+        if len(all_scored_papers) <= 5:
+            RELEVANCE_CHECK_THRESHOLD = max(RELEVANCE_CHECK_THRESHOLD - 15, 20)
+            logger.info(f"论文数量较少（{len(all_scored_papers)}篇），动态降低筛选阈值至 {RELEVANCE_CHECK_THRESHOLD}分")
+        elif len(all_scored_papers) <= 10:
+            RELEVANCE_CHECK_THRESHOLD = max(RELEVANCE_CHECK_THRESHOLD - 10, 30)
+            logger.info(f"论文数量较少（{len(all_scored_papers)}篇），动态降低筛选阈值至 {RELEVANCE_CHECK_THRESHOLD}分")
         logger.info(f"快速筛选阈值: {RELEVANCE_CHECK_THRESHOLD}分（只对≥{RELEVANCE_CHECK_THRESHOLD}分的论文进行AI判断）")
         filtered_papers = []
         filtered_count = 0
@@ -250,13 +257,20 @@ def run_push_task(window_days: int = None, top_k: int = None):
                 if relevant_reports:
                     daily_report += "\n\n---\n\n"
                 daily_report += f"### ⏭️ 已过滤论文（共 {len(irrelevant_reports)} 篇，不属于三大研究方向）\n\n"
-                daily_report += "\n\n".join([f"## 已过滤论文 {i}\n\n{report}" 
-                                            for i, report in enumerate(irrelevant_reports, 1)])
+                # 规范化不相关论文格式：将 "## 不相关论文" 改为 "### 不相关论文"
+                normalized_irrelevant = []
+                for report in irrelevant_reports:
+                    normalized = report.replace("## 不相关论文", "### 不相关论文")
+                    normalized = normalized.replace("## 【论文标题】", "### 【论文标题】")
+                    normalized_irrelevant.append(normalized)
+                daily_report += "\n\n".join([f"## 已过滤论文 {i}\n\n{report}"
+                                            for i, report in enumerate(normalized_irrelevant, 1)])
         else:
             daily_report = "## 📊 今日研究总结\n\n本次检索范围内未发现相关论文。"
         
-        # 保存报告到文件
-        save_report_to_file(daily_report, len(all_scored_papers), source_results, run_id)
+        # 保存报告到文件（传入分类统计信息）
+        save_report_to_file(daily_report, len(all_scored_papers), source_results, run_id,
+                            relevant_count=len(relevant_reports), irrelevant_count=len(irrelevant_reports))
         
         # 推送最终报告（不标记已推送，每次运行内容一致）
         logger.info("\n开始推送最终报告...")
@@ -292,23 +306,24 @@ def run_push_task(window_days: int = None, top_k: int = None):
         raise
 
 
-def save_report_to_file(content: str, papers_count: int, source_results: List, run_id: str):
+def save_report_to_file(content: str, papers_count: int, source_results: List, run_id: str,
+                        relevant_count: int = 0, irrelevant_count: int = 0):
     """保存报告到文件"""
     from pathlib import Path
-    
+
     today = datetime.date.today().strftime('%Y%m%d')
     filename = f"data/reports/生化领域突破汇总_{today}.txt"
-    
+
     try:
         # 确保 reports 目录存在
         report_path = Path(filename)
         report_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         sources_info = [f"{r.source_name}({len(r.papers)})" for r in source_results]
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(f"生成时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"运行ID: {run_id}\n")
-            f.write(f"论文数量: {papers_count}\n")
+            f.write(f"论文总数: {papers_count}（相关: {relevant_count} 篇，已过滤: {irrelevant_count} 篇）\n")
             f.write(f"数据源: {', '.join(sources_info)}\n")
             f.write("=" * 80 + "\n\n")
             f.write(content)

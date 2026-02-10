@@ -19,9 +19,9 @@ class EuropePMCSource(BaseSource):
     
     def fetch(self, sent_ids: Set[str], exclude_keywords: List[str]) -> SourceResult:
         try:
-            # 只检索前一天的论文（不包括今天）
+            # 使用窗口天数计算检索范围（解决索引延迟导致返回0篇的问题）
             yesterday = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-            start_date = yesterday
+            start_date = (datetime.date.today() - datetime.timedelta(days=self.window_days)).strftime("%Y-%m-%d")
             
             # 优化查询：使用更灵活的关键词匹配（去掉部分引号，允许更宽松的匹配）
             # 固氮相关

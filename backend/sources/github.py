@@ -45,24 +45,32 @@ class GitHubSource(BaseSource):
         papers = []
         all_keywords = Config.get_all_keywords()
         target_categories = [c.lower() for c in Config.TARGET_CATEGORIES]
-        
+
+        # 构建请求头（支持Token认证以提高限流额度）
+        headers = {'Accept': 'application/vnd.github.v3+json'}
+        if Config.GITHUB_TOKEN:
+            headers['Authorization'] = f'token {Config.GITHUB_TOKEN}'
+            logger.info("GitHub API 使用Token认证（限流额度: 30次/分钟）")
+        else:
+            logger.warning("GitHub API 未配置Token，使用匿名访问（限流额度: 10次/分钟），建议设置 GITHUB_TOKEN 环境变量")
+
         # 限流统计
         rate_limit_errors = 0
         max_rate_limit_errors = 3  # 如果连续3次限流，停止查询
-        
+
         for query_idx, query in enumerate(self.queries):
             # 在请求之间添加延迟，避免触发限流
             if query_idx > 0:
-                time.sleep(1)  # 每个查询之间延迟1秒
-            
+                time.sleep(2 if not Config.GITHUB_TOKEN else 1)  # 无Token时增加间隔
+
             # 如果限流错误过多，跳过剩余查询
             if rate_limit_errors >= max_rate_limit_errors:
                 logger.warning(f"GitHub API 限流错误过多（{rate_limit_errors}次），跳过剩余 {len(self.queries) - query_idx} 个查询")
                 break
-            
+
             max_retries = 3
             retry_delay = 5  # 初始重试延迟（秒）
-            
+
             for attempt in range(max_retries):
                 try:
                     # 增加每个查询的结果数：3 -> 5
@@ -71,7 +79,7 @@ class GitHubSource(BaseSource):
                         url,
                         timeout=15,
                         proxies={'http': None, 'https': None},
-                        headers={'Accept': 'application/vnd.github.v3+json'}
+                        headers=headers
                     )
                     
                     # 检查限流错误
@@ -79,9 +87,21 @@ class GitHubSource(BaseSource):
                         error_msg = str(response.text)
                         if 'rate limit' in error_msg.lower():
                             rate_limit_errors += 1
-                            if attempt < max_retries - 1:
+                            # 尝试从响应头获取限流重置时间
+                            reset_time = response.headers.get('X-RateLimit-Reset', '')
+                            if reset_time:
+                                try:
+                                    import calendar
+                                    reset_ts = int(reset_time)
+                                    now_ts = int(calendar.timegm(datetime.datetime.utcnow().timetuple()))
+                                    wait_from_header = max(reset_ts - now_ts + 1, 1)
+                                    wait_time = min(wait_from_header, 65)  # 最多等65秒
+                                except (ValueError, TypeError):
+                                    wait_time = retry_delay * (2 ** attempt)
+                            else:
                                 # 指数退避：5秒、10秒、20秒
                                 wait_time = retry_delay * (2 ** attempt)
+                            if attempt < max_retries - 1:
                                 logger.warning(f"GitHub API 限流，等待 {wait_time} 秒后重试（第 {attempt + 1}/{max_retries} 次）...")
                                 time.sleep(wait_time)
                                 continue
