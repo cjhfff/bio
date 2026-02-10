@@ -189,7 +189,7 @@ class Config:
     
     # 抓取窗口配置（天数）
     DEFAULT_WINDOW_DAYS = int(os.getenv("DEFAULT_WINDOW_DAYS", "1"))  # 改为1天，只检索当天
-    EUROPEPMC_WINDOW_DAYS = int(os.getenv("EUROPEPMC_WINDOW_DAYS", "1"))  # 改为1天，只检索当天
+    EUROPEPMC_WINDOW_DAYS = int(os.getenv("EUROPEPMC_WINDOW_DAYS", "1"))  # 1天窗口，只检索前一天
     
     # 快速AI预筛选配置
     QUICK_FILTER_THRESHOLD = int(os.getenv("QUICK_FILTER_THRESHOLD", "50"))  # 快速筛选阈值（只对≥此分数的论文进行AI判断）
@@ -257,6 +257,9 @@ class Config:
     LOG_FILE = os.getenv("LOG_FILE", "paper_push.log")
     
     # ========== 优化系统配置 ==========
+    # GitHub API配置（使用Token避免限流）
+    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+
     # Semantic Scholar API配置
     SEMANTIC_SCHOLAR_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "")
     
