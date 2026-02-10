@@ -209,13 +209,13 @@ def score_paper(paper: Paper) -> ScoredPaper:
             if '-' in paper.date[:10]:
                 try:
                     paper_date = datetime.datetime.strptime(paper.date[:10], '%Y-%m-%d').date()
-                except:
-                    pass
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"日期解析失败（格式: YYYY-MM-DD）: {paper.date[:10]} - {e}")
             elif '/' in paper.date[:10]:
                 try:
                     paper_date = datetime.datetime.strptime(paper.date[:10], '%Y/%m/%d').date()
-                except:
-                    pass
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"日期解析失败（格式: YYYY/MM/DD）: {paper.date[:10]} - {e}")
             
             if paper_date:
                 today = datetime.date.today()

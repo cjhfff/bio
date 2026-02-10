@@ -154,8 +154,8 @@ class BioRxivSource(BaseSource):
                             paper_date = datetime.datetime.strptime(paper_date_str[:10], '%Y-%m-%d').date()
                             if oldest_date is None or paper_date < oldest_date:
                                 oldest_date = paper_date
-                        except:
-                            pass
+                        except (ValueError, TypeError) as e:
+                            logger.debug(f"bioRxiv 日期解析失败: {paper_date_str} - {e}")
                 
                 # 如果最老的论文超出窗口期，提前终止
                 if oldest_date and oldest_date < start_date_obj:
@@ -199,8 +199,8 @@ class BioRxivSource(BaseSource):
                             # 如果日期是去年但距离今天超过30天，记录警告
                             if paper_date.year < today.year and (today - paper_date).days > 30:
                                 logger.warning(f"[日期异常] bioRxiv论文日期可能异常: 标题='{p.get('title', '')[:50]}...', 日期={paper_date_str}, 当前日期={today}")
-                        except:
-                            pass
+                        except (ValueError, TypeError) as e:
+                            logger.debug(f"bioRxiv 日期验证失败: {paper_date_str} - {e}")
                     
                     paper = Paper(
                         title=p.get('title', '无标题'),
@@ -284,8 +284,8 @@ class BioRxivSource(BaseSource):
             if 'session' in locals():
                 try:
                     session.close()
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"关闭 session 时出错: {e}")
 
 
 
