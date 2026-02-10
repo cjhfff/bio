@@ -69,12 +69,10 @@ reports/*.html
 tmp/
 *.tmp
 temp/
-*.swp
 
 # Cache
 .cache/
 *.cache
-__pycache__/
 
 # Docker
 *.tar
@@ -82,5 +80,4 @@ docker-compose.override.yml
 
 # Backup files
 *.backup
-*~
 
